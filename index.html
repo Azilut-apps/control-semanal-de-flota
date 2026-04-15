@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Control Semanal AZILUT</title>
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#b91c1c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Azilut Flota">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            .break-before { break-before: page; }
+            .break-inside-avoid { break-inside: avoid; }
+            body { background: white; }
+            .shadow-xl { box-shadow: none !important; }
+            .border { border-color: #000 !important; }
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Custom PC Layout for items */
+        .items-grid-pc {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        .item-row-pc {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8fafc;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            border: 1px solid #e2e8f0;
+        }
+        .pc-toggle-btn {
+            background: #1e293b;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+        .pc-toggle-btn.active {
+            background: #b91c1c;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
+    
+    <div id="app" class="pb-12"></div>
+
+    <script>
+        // --- SERVICE WORKER REGISTRATION ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('SW Registered', reg))
+                    .catch(err => console.log('SW Error', err));
+            });
+        }
+
+        // --- DATA INYECTADA ---
+        const vehicles = [
+            {"id":"CA-02","description":"Pickup Ranger","year":2010,"brand":"Ford","domain":"KEF 062"},
+            {"id":"CA-06","description":"Pickup Ranger","year":2010,"brand":"Ford","domain":"KFV 308"},
+            {"id":"CA-08","description":"Camión Hidrogrúa Cargo 1722","year":2006,"brand":"Ford","domain":"GQL 399"},
+            {"id":"CA-09","description":"Camión Hidrogrúa Cargo 1722","year":2006,"brand":"Ford","domain":"GBC 376"},
+            {"id":"CA-10","description":"Camión Hidrogrúa Cargo 1722","year":2005,"brand":"Ford","domain":"FXV 067"},
+            {"id":"CA-11","description":"Partner","year":2013,"brand":"Peugeot","domain":"MPY 698"},
+            {"id":"CA-12","description":"Pickup Amarok","year":2014,"brand":"Volkswagen","domain":"NNP 230"},
+            {"id":"CA-13","description":"Berlingo","year":2017,"brand":"Citroën","domain":"AC 015 YB"},
+            {"id":"CA-14","description":"Berlingo","year":2017,"brand":"Citroën","domain":"AC 015 YD"},
+            {"id":"CA-15","description":"Berlingo","year":2017,"brand":"Citroën","domain":"AC 015 YE"},
+            {"id":"CA-16","description":"Berlingo","year":2017,"brand":"Citroën","domain":"AC 015 YF"},
+            {"id":"CA-17","description":"Berlingo","year":2017,"brand":"Citroën","domain":"AC 015 ZV"},
+            {"id":"CA-18","description":"Berlingo","year":2017,"brand":"Citroën","domain":"AC 015 ZZ"},
+            {"id":"CA-19","description":"Pickup Amarok","year":2021,"brand":"Volkswagen","domain":"AE 923 UT"},
+            {"id":"CA-20","description":"Pickup Amarok","year":2021,"brand":"Volkswagen","domain":"AE 923 UU"},
+            {"id":"CA-21","description":"Kangoo","year":2022,"brand":"Renault","domain":"AF 730 NK"},
+            {"id":"CA-22","description":"Kangoo","year":2022,"brand":"Renault","domain":"AF 730 NL"},
+            {"id":"CA-23","description":"Furgón Sprinter","year":2023,"brand":"Mercedes Benz","domain":"AF 800 XA"},
+            {"id":"CA-24","description":"Camión Tractor Constellation 25360","year":2023,"brand":"Volkswagen","domain":"AF 954 ML"},
+            {"id":"CA-25","description":"Camión Chasis Plancha AdvanTech","year":2023,"brand":"Volkswagen","domain":"AG 036 NE"},
+            {"id":"MA-01","description":"Manipulador","year":2018,"brand":"Manitou","domain":"DNQ12"},
+            {"id":"EQ-01","description":"Minicargadora","year":2006,"brand":"John Deere","domain":"BHV54"},
+            {"id":"EQ-02","description":"Autoelevador","year":2017,"brand":"Mitsubishi","domain":"DIK85"}
+        ];
+        const genericItems = [
+            {id: "g1", sub: "DOCUMENTACIÓN", label: "Tarjeta Verde"},
+            {id: "g2", sub: "DOCUMENTACIÓN", label: "Seguro"},
+            {id: "s2", sub: "DOCUMENTACIÓN", label: "VTV"},
+            {id: "g45", sub: "DOCUMENTACIÓN", label: "Credencial autogestionable YPF"},
+            
+            {id: "g5", sub: "ILUMINACIÓN", label: "Luces altas"},
+            {id: "g6", sub: "ILUMINACIÓN", label: "Luces bajas"},
+            {id: "g7", sub: "ILUMINACIÓN", label: "Luces freno"},
+            {id: "g8", sub: "ILUMINACIÓN", label: "Luces retroceso"},
+            {id: "g9", sub: "ILUMINACIÓN", label: "Luces giro"},
+            {id: "g10", sub: "ILUMINACIÓN", label: "Luces posición"},
+            {id: "g11", sub: "ILUMINACIÓN", label: "Luces balizas"},
+            {id: "g13", sub: "ILUMINACIÓN", label: "Alarma retroceso"},
+
+            {id: "g3", sub: "SEGURIDAD", label: "Cinturón de seguridad"},
+            {id: "g4", sub: "SEGURIDAD", label: "Apoya cabezas"},
+            {id: "g20", sub: "SEGURIDAD", label: "Botiquín Primeros Auxilios"},
+            {id: "g21", sub: "SEGURIDAD", label: "Puesta a tierra"},
+            {id: "g22", sub: "SEGURIDAD", label: "Pala manual"},
+            {id: "g23", sub: "SEGURIDAD", label: "Balizas Triangulares"},
+            {id: "g24", sub: "SEGURIDAD", label: "Conos y Calzas de Ruedas"},
+
+            {id: "g38", sub: "ESTADO TÉCNICO", label: "Dirección"},
+            {id: "g39", sub: "ESTADO TÉCNICO", label: "Suspensión"},
+            {id: "g40", sub: "ESTADO TÉCNICO", label: "Freno de mano"},
+            {id: "g41", sub: "ESTADO TÉCNICO", label: "Nivel de aceite y agua"},
+            {id: "g42", sub: "ESTADO TÉCNICO", label: "Nivel líquido de freno e hidráulico"},
+            {id: "g43", sub: "ESTADO TÉCNICO", label: "Mangueras"},
+            {id: "g44", sub: "ESTADO TÉCNICO", label: "Pérdidas visibles de fluidos"},
+            {id: "g14", sub: "ESTADO TÉCNICO", label: "Electroventilador"},
+
+            {id: "g15", sub: "VISIBILIDAD Y ACCESORIOS", label: "Espejos retrovisores"},
+            {id: "g16", sub: "VISIBILIDAD Y ACCESORIOS", label: "Limpia y lava parabrisas"},
+            {id: "g17", sub: "VISIBILIDAD Y ACCESORIOS", label: "Desempañador"},
+            {id: "g12", sub: "VISIBILIDAD Y ACCESORIOS", label: "Bocina"},
+
+            {id: "g25", sub: "CARROCERÍA Y OTROS", label: "Estado Carrocería"},
+            {id: "g26", sub: "CARROCERÍA Y OTROS", label: "Paragolpes"},
+            {id: "g27", sub: "CARROCERÍA Y OTROS", label: "Estribos"},
+            {id: "g28", sub: "CARROCERÍA Y OTROS", label: "Estado Neumáticos / Orugas"},
+            {id: "g29", sub: "CARROCERÍA Y OTROS", label: "Tornillos y tuercas de ruedas"},
+            {id: "g30", sub: "CARROCERÍA Y OTROS", label: "Chasis"},
+            {id: "g31", sub: "CARROCERÍA Y OTROS", label: "Barandas laterales y/o escalera"},
+            {id: "g32", sub: "CARROCERÍA Y OTROS", label: "Material reflectivo lateral y trasero"},
+            {id: "g33", sub: "CARROCERÍA Y OTROS", label: "Caño de escape"},
+            {id: "g34", sub: "CARROCERÍA Y OTROS", label: "Arrestallamas"},
+            {id: "g35", sub: "CARROCERÍA Y OTROS", label: "Chapas patentes"},
+            {id: "g36", sub: "CARROCERÍA Y OTROS", label: "Cadenas y pernos"},
+            {id: "g37", sub: "CARROCERÍA Y OTROS", label: "Estado del Tanque y sus visores"},
+            {id: "g18", sub: "CARROCERÍA Y OTROS", label: "Rueda de auxilio"},
+            {id: "g19", sub: "CARROCERÍA Y OTROS", label: "Crique"}
+        ];
+        const specificItems = [
+            {id: "s1", sub: "ESPECÍFICO", label: "RUTA"},
+            {id: "s3", sub: "ESPECÍFICO", label: "Válvulas de descarga"},
+            {id: "s4", sub: "ESPECÍFICO", label: "Acoples"},
+            {id: "s5", sub: "ESPECÍFICO", label: "Lubricación de rodillos"},
+            {id: "s6", sub: "ESPECÍFICO", label: "Estructura pluma"},
+            {id: "s7", sub: "ESPECÍFICO", label: "Sistema hidráulico pluma"},
+            {id: "s8", sub: "ESPECÍFICO", label: "Trabas volquetes (uñas)"},
+            {id: "s9", sub: "ESPECÍFICO", label: "Cadenas y ganchos"},
+            {id: "s10", sub: "ESPECÍFICO", label: "Grilletes sujeta ganchos"},
+            {id: "s11", sub: "ESPECÍFICO", label: "Lanza"},
+            {id: "s12", sub: "ESPECÍFICO", label: "Apoyos laterales"},
+            {id: "s13", sub: "ESPECÍFICO", label: "Patas estabilizadoras"},
+            {id: "s14", sub: "ESPECÍFICO", label: "Limitador de carga máxima"},
+            {id: "s15", sub: "ESPECÍFICO", label: "Cartelería de carga máxima"},
+            {id: "s16", sub: "ESPECÍFICO", label: "Tabla de cargas-mandos"},
+            {id: "s17", sub: "ESPECÍFICO", label: "Mandos y comandos"},
+            {id: "s18", sub: "ESPECÍFICO", label: "Estado de la Pala / Balde / Uñas"},
+            {id: "s19", sub: "ESPECÍFICO", label: "Barandas laterales de pasarela"},
+            {id: "s20", sub: "ESPECÍFICO", label: "Portones laterales y trasero"},
+            {id: "s21", sub: "ESPECÍFICO", label: "Estaqueras y fajas de amarre"},
+            {id: "s22", sub: "ESPECÍFICO", label: "Lonas"}
+        ];
+        
+        // --- CONFIG ---
+        const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+        const KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        const URGENCY = { VERY_HIGH: 'MUY ALTA', HIGH: 'ALTA', MEDIUM: 'MEDIA', LOW: 'BAJA' };
+
+        // --- STATE ---
+        let state = {
+            view: 'list',
+            searchTerm: '',
+            selectedVehicle: null,
+            history: [],
+            formData: initFormData(),
+            showHistoryModal: false,
+            layoutMode: window.innerWidth > 768 ? 'pc' : 'mobile'
+        };
+
+        // --- INIT ---
+        function init() {
+            loadHistory();
+            render();
+        }
+
+        function initFormData() {
+            return {
+                responsible: '',
+                startMileage: '',
+                weekDate: new Date().toISOString().split('T')[0],
+                dailyChecks: {
+                    monday: { oil: '', water: '', notes: '' },
+                    tuesday: { oil: '', water: '', notes: '' },
+                    wednesday: { oil: '', water: '', notes: '' },
+                    thursday: { oil: '', water: '', notes: '' },
+                    friday: { oil: '', water: '', notes: '' },
+                },
+                checks: {}, 
+                urgency: null,
+                observations: ''
+            };
+        }
+
+        function loadHistory() {
+            try {
+                const stored = localStorage.getItem('vehicle_history');
+                if (stored) {
+                    state.history = JSON.parse(stored);
+                    if (!Array.isArray(state.history)) state.history = [];
+                }
+            } catch (e) {
+                console.error("Error loading history", e);
+                state.history = [];
+            }
+        }
+
+        // --- LOGIC ---
+
+        function handleSearch(e) {
+            state.searchTerm = e.target.value.toLowerCase();
+            renderList(); 
+        }
+
+        function selectVehicle(id) {
+            state.selectedVehicle = vehicles.find(v => v.id === id);
+            state.view = 'form';
+            
+            const saved = state.history
+                .filter(r => r.vehicleId === id && r.weekDate === state.formData.weekDate)
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+            
+            if (saved) {
+                state.formData = {
+                    responsible: saved.responsible || '',
+                    startMileage: saved.startMileage || '',
+                    weekDate: saved.weekDate,
+                    dailyChecks: saved.dailyChecks || initFormData().dailyChecks,
+                    checks: saved.checkStatus || {},
+                    urgency: saved.urgency || null,
+                    observations: saved.generalObservations || ''
+                };
+            } else {
+                state.formData = initFormData();
+            }
+            
+            render();
+        }
+
+        function goBack() {
+            state.selectedVehicle = null;
+            state.view = 'list';
+            render();
+        }
+
+        function updateForm(field, value, day = null, subField = null) {
+            if (day) {
+                state.formData.dailyChecks[day][subField] = value;
+            } else {
+                state.formData[field] = value;
+            }
+            
+            if (field === 'weekDate') {
+                const saved = state.history
+                .filter(r => r.vehicleId === state.selectedVehicle.id && r.weekDate === value)
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+            
+                if (saved) {
+                    state.formData = {
+                        ...state.formData,
+                        responsible: saved.responsible,
+                        startMileage: saved.startMileage,
+                        dailyChecks: saved.dailyChecks,
+                        checks: saved.checkStatus,
+                        urgency: saved.urgency,
+                        observations: saved.generalObservations
+                    };
+                } else {
+                    state.formData = initFormData();
+                    state.formData.weekDate = value;
+                }
+            }
+            render();
+        }
+
+        function toggleLayout() {
+            state.layoutMode = state.layoutMode === 'pc' ? 'mobile' : 'pc';
+            render();
+        }
+
+        function toggleCheck(itemId, status) {
+            if (state.formData.checks[itemId] === status) {
+                delete state.formData.checks[itemId];
+            } else {
+                state.formData.checks[itemId] = status;
+            }
+            render();
+        }
+
+        function clearChecks() {
+            state.formData.checks = {};
+            render();
+        }
+
+        function getStats() {
+            let bad = 0, good = 0;
+            const total = KEYS.length * 2;
+            KEYS.forEach(k => {
+                const d = state.formData.dailyChecks[k];
+                if(d.oil === 'MALO') bad++;
+                if(d.oil === 'BUENO') good++;
+                if(d.water === 'MALO') bad++;
+                if(d.water === 'BUENO') good++;
+            });
+            return { bad, good, total };
+        }
+
+        function validate(requireUrgency = false) {
+            const errs = [];
+            if (!state.formData.responsible) errs.push("Falta Responsable");
+            if (!state.formData.startMileage) errs.push("Falta Kilometraje");
+            if (!state.formData.weekDate) errs.push("Falta Fecha");
+            if (requireUrgency && !state.formData.urgency) errs.push("Falta Urgencia");
+            return errs;
+        }
+
+        function saveRecord(type) {
+            const vehicle = state.selectedVehicle;
+            const record = {
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                vehicleId: vehicle.id,
+                responsible: state.formData.responsible,
+                startMileage: state.formData.startMileage,
+                weekDate: state.formData.weekDate,
+                type: type,
+                urgency: state.formData.urgency,
+                dailyChecks: JSON.parse(JSON.stringify(state.formData.dailyChecks)),
+                checkStatus: JSON.parse(JSON.stringify(state.formData.checks)),
+                generalObservations: state.formData.observations,
+                reportedItems: [...genericItems, ...specificItems]
+                    .filter(i => state.formData.checks[i.id])
+                    .map(i => ({ label: i.label, category: i.category, status: state.formData.checks[i.id] }))
+            };
+
+            state.history.unshift(record);
+            localStorage.setItem('vehicle_history', JSON.stringify(state.history));
+            alert('Guardado correctamente: ' + type);
+            render();
+        }
+
+        function exportExcel(emailTrigger) {
+            if (validate().length > 0) return alert(validate().join('\n'));
+            saveRecord('Reporte Semanal');
+
+            const wb = XLSX.utils.book_new();
+            const data = [
+                ["REPORTE SEMANAL"], ["VEHÍCULO", state.selectedVehicle.description],
+                ["PATENTE", state.selectedVehicle.domain], ["RESPONSABLE", state.formData.responsible],
+                ["KM", state.formData.startMileage], ["FECHA", state.formData.weekDate], [""]
+            ];
+            
+            data.push(["DIA", "ACEITE", "AGUA", "NOTAS"]);
+            KEYS.forEach((k, i) => {
+                const d = state.formData.dailyChecks[k];
+                data.push([DAYS[i], d.oil, d.water, d.notes]);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            XLSX.utils.book_append_sheet(wb, ws, "Reporte");
+            const fname = `Reporte_${state.selectedVehicle.id}_${state.formData.weekDate}.xlsx`;
+            XLSX.writeFile(wb, fname);
+
+            if (emailTrigger) {
+                const body = `Adjunto reporte para ${state.selectedVehicle.domain}. Obs: ${state.formData.observations || '-'}`;
+                window.location.href = `mailto:administracion@azilutsa.com.ar?subject=Reporte ${state.selectedVehicle.id}&body=${encodeURIComponent(body)}`;
+            }
+        }
+
+        function sendMaintenanceAlert() {
+            if (validate(true).length > 0) return alert(validate(true).join('\n'));
+            saveRecord('Pedido Mantenimiento');
+            
+            const checks = state.formData.checks;
+            const items = [...genericItems, ...specificItems]
+                .filter(i => checks[i.id])
+                .map(i => {
+                    const status = checks[i.id];
+                    const prefix = status === 'FALLA CRÍTICA' ? '🚨 [FALLA CRÍTICA] ' : '🔧 [ADECUACIÓN] ';
+                    return `${prefix}${i.label}`;
+                });
+            
+            const criticalCount = items.filter(t => t.includes('FALLA CRÍTICA')).length;
+            const subjectPrefix = criticalCount > 0 ? '⚠️ URGENTE: FALLA CRÍTICA - ' : 'MANTENIMIENTO - ';
+
+            const body = `URGENCIA: ${state.formData.urgency}\n\nDETALLE DE SOLICITUD:\n${items.join('\n')}\n\nObservaciones:\n${state.formData.observations || '-'}`;
+            window.location.href = `mailto:administracion@azilutsa.com.ar?subject=${subjectPrefix}${state.selectedVehicle.id}&body=${encodeURIComponent(body)}`;
+        }
+
+        function backupData() {
+            const blob = new Blob([JSON.stringify(state.history)], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `BACKUP_AZILUT_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+        }
+
+        function restoreData(input) {
+            if (!input.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if(Array.isArray(data)) {
+                        state.history = data;
+                        localStorage.setItem('vehicle_history', JSON.stringify(data));
+                        alert('Restaurado ' + data.length + ' registros.');
+                        render();
+                    }
+                } catch(err) { alert('Error archivo invalido'); }
+            };
+            reader.readAsText(input.files[0]);
+        }
+
+        // --- RENDERERS ---
+
+        function render() {
+            const app = document.getElementById('app');
+            app.innerHTML = '';
+            
+            if (state.view === 'list') {
+                app.innerHTML = renderHeader() + renderVehicleList() + renderFooter();
+            } else {
+                app.innerHTML = renderForm();
+            }
+            
+            if (state.showHistoryModal) renderHistoryModal();
+        }
+
+        function renderList() {
+             const listContainer = document.getElementById('vehicle-list-container');
+             if(listContainer) {
+                 listContainer.outerHTML = renderVehicleList();
+             } else {
+                 render(); 
+             }
+        }
+
+        function renderHeader() {
+            return `
+            <div class="bg-white shadow-sm border-b border-red-100 mb-8 print:hidden">
+                <div class="max-w-6xl mx-auto px-8 py-6 flex justify-between items-center">
+                    <div>
+                        <h1 class="text-4xl font-black text-red-700 tracking-tight">AZILUT S.A.</h1>
+                        <h2 class="text-lg font-bold text-slate-800 uppercase">FO 57 Control Semanal <span class="text-slate-400 text-sm">vFinal</span></h2>
+                    </div>
+                    <div>
+                        <button onclick="toggleLayout()" class="pc-toggle-btn ${state.layoutMode === 'pc' ? 'active' : ''}">
+                            ${state.layoutMode === 'pc' ? '💻 MODO PC' : '📱 MODO MÓVIL'}
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        function renderFooter() {
+            return `
+            <footer class="bg-white border-t border-slate-100 py-8 mt-8">
+                <div class="max-w-6xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="text-xs text-slate-400">Azilut S.A. &copy; 2025 - Registros: <b>${state.history.length}</b></div>
+                    <div class="flex gap-2">
+                        <button onclick="backupData()" class="bg-slate-700 text-white text-xs px-3 py-2 rounded">💾 Respaldar Datos</button>
+                        <label class="bg-slate-200 text-slate-700 text-xs px-3 py-2 rounded cursor-pointer">
+                            📂 Restaurar
+                            <input type="file" class="hidden" onchange="restoreData(this)" accept=".json">
+                        </label>
+                    </div>
+                </div>
+            </footer>`;
+        }
+
+        function renderVehicleList() {
+            const filtered = vehicles.filter(v => 
+                v.id.toLowerCase().includes(state.searchTerm) || 
+                v.domain.toLowerCase().includes(state.searchTerm) || 
+                v.description.toLowerCase().includes(state.searchTerm)
+            );
+
+            let html = `
+            <div id="vehicle-list-container" class="max-w-6xl mx-auto p-8">
+                <div class="mb-8 text-center max-w-xl mx-auto">
+                    <input type="text" placeholder="Buscar vehículo..." 
+                        class="w-full p-4 rounded-full border border-slate-200 shadow-sm text-lg focus:ring-2 focus:ring-red-500 outline-none"
+                        oninput="handleSearch(event)" value="${state.searchTerm}">
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">`;
+
+            if (filtered.length === 0) {
+                html += `<div class="col-span-3 text-center py-12 text-slate-400">No se encontraron vehículos.</div>`;
+            }
+
+            filtered.forEach(v => {
+                html += `
+                <div onclick="selectVehicle('${v.id}')" class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:border-red-300 cursor-pointer transition-all group">
+                    <div class="flex justify-between mb-4">
+                        <span class="bg-red-50 text-red-700 font-bold px-3 py-1 rounded-full text-sm border border-red-100">${v.id}</span>
+                        <span class="text-slate-400 text-sm">${v.year}</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800 mb-1 group-hover:text-red-700">${v.description}</h3>
+                    <p class="text-slate-500 font-medium mb-4">${v.brand}</p>
+                    <div class="border-t border-slate-50 pt-4 flex justify-between">
+                        <span class="font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded text-sm font-bold">${v.domain}</span>
+                        <span class="text-red-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity">Seleccionar &rarr;</span>
+                    </div>
+                </div>`;
+            });
+
+            html += `</div></div>`;
+            return html;
+        }
+
+        function renderForm() {
+            const v = state.selectedVehicle;
+            const stats = getStats();
+            
+            const btnClass = (val, target) => `w-8 h-8 rounded text-xs font-bold border flex items-center justify-center transition-colors ${val === target ? (target === 'BUENO' ? 'bg-green-600 text-white border-green-700' : 'bg-red-600 text-white border-red-700') : 'bg-slate-50 text-slate-300 border-slate-200'}`;
+
+            let html = `
+            <div class="max-w-5xl mx-auto bg-white shadow-xl rounded-lg overflow-hidden border border-slate-200 print:shadow-none print:border-none print:w-full">
+                <!-- Header -->
+                <div class="bg-white p-6 border-b-4 border-red-600 print:border-b-2">
+                    <button onclick="goBack()" class="mb-4 bg-slate-800 text-white px-3 py-1 text-xs rounded uppercase tracking-wide print:hidden">&larr; Volver</button>
+                    <div class="flex flex-col md:flex-row justify-between gap-4">
+                        <div>
+                            <h1 class="text-3xl font-black text-red-700 uppercase">AZILUT S.A.</h1>
+                            <h2 class="text-lg font-bold text-slate-800">FO 57 Control Semanal</h2>
+                        </div>
+                        <div class="text-right print:hidden">
+                            <button onclick="state.showHistoryModal=true; render()" class="bg-slate-100 text-slate-700 px-3 py-2 rounded text-xs font-bold border border-slate-300">🕒 Ver Historial</button>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 bg-slate-50 p-4 rounded border border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 print:bg-white print:border-slate-800 print:border">
+                        <div><span class="text-xs font-bold text-slate-400 uppercase block">Vehículo</span><span class="text-lg font-bold">${v.description} (${v.id})</span></div>
+                        <div><span class="text-xs font-bold text-slate-400 uppercase block">Patente</span><span class="font-mono text-lg font-bold">${v.domain}</span></div>
+                    </div>
+                </div>
+
+                <div class="p-6 space-y-8">
+                    <!-- Inputs -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 print:grid-cols-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Responsable *</label>
+                            <input type="text" class="w-full p-2 border border-slate-300 rounded" value="${state.formData.responsible}" onchange="updateForm('responsible', this.value)">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Km Inicio *</label>
+                            <input type="number" class="w-full p-2 border border-slate-300 rounded" value="${state.formData.startMileage}" onchange="updateForm('startMileage', this.value)">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha Semana *</label>
+                            <input type="date" class="w-full p-2 border border-slate-300 rounded" value="${state.formData.weekDate}" onchange="updateForm('weekDate', this.value)">
+                        </div>
+                    </div>
+
+                    <!-- Daily -->
+                    <div>
+                        <h3 class="font-bold text-slate-800 mb-2 border-b pb-1 uppercase text-sm">1. Control Diario</h3>
+                        ${stats.bad >= 3 ? '<div class="bg-red-100 text-red-800 p-2 mb-2 text-xs font-bold rounded border-l-4 border-red-600">🚨 ALERTA: 3+ Fallas detectadas.</div>' : ''}
+                        ${stats.good === 10 ? '<div class="bg-yellow-50 text-yellow-800 p-2 mb-2 text-xs font-bold rounded border-l-4 border-yellow-400">🏆 Semana Perfecta</div>' : ''}
+                        
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm border-collapse border border-slate-200">
+                                <thead>
+                                    <tr class="bg-slate-50">
+                                        <th class="border p-2 w-32">Item</th>
+                                        ${DAYS.map(d => `<th class="border p-2 text-center w-32">${d}</th>`).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="border p-2 font-bold">Aceite</td>
+                                        ${KEYS.map(k => `
+                                            <td class="border p-2 text-center">
+                                                <div class="flex justify-center gap-1 print:hidden">
+                                                    <button onclick="updateForm(null, 'BUENO', '${k}', 'oil')" class="${btnClass(state.formData.dailyChecks[k].oil, 'BUENO')}">B</button>
+                                                    <button onclick="updateForm(null, 'MALO', '${k}', 'oil')" class="${btnClass(state.formData.dailyChecks[k].oil, 'MALO')}">M</button>
+                                                </div>
+                                                <span class="hidden print:block font-bold">${state.formData.dailyChecks[k].oil || '-'}</span>
+                                            </td>
+                                        `).join('')}
+                                    </tr>
+                                    <tr class="bg-slate-50">
+                                        <td class="border p-2 font-bold">Agua</td>
+                                        ${KEYS.map(k => `
+                                            <td class="border p-2 text-center">
+                                                <div class="flex justify-center gap-1 print:hidden">
+                                                    <button onclick="updateForm(null, 'BUENO', '${k}', 'water')" class="${btnClass(state.formData.dailyChecks[k].water, 'BUENO')}">B</button>
+                                                    <button onclick="updateForm(null, 'MALO', '${k}', 'water')" class="${btnClass(state.formData.dailyChecks[k].water, 'MALO')}">M</button>
+                                                </div>
+                                                <span class="hidden print:block font-bold">${state.formData.dailyChecks[k].water || '-'}</span>
+                                            </td>
+                                        `).join('')}
+                                    </tr>
+                                    <tr>
+                                        <td class="border p-2 font-bold text-xs">Notas</td>
+                                        ${KEYS.map(k => `
+                                            <td class="border p-2"><input type="text" class="w-full text-xs bg-transparent outline-none" placeholder="..." value="${state.formData.dailyChecks[k].notes}" onchange="updateForm(null, this.value, '${k}', 'notes')"></td>
+                                        `).join('')}
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-2 flex gap-2 justify-end print:hidden">
+                            <button onclick="saveRecord('Parcial')" class="bg-slate-600 text-white text-xs px-3 py-2 rounded">Guardar Progreso</button>
+                            <button onclick="exportExcel(false)" class="bg-slate-800 text-white text-xs px-3 py-2 rounded">Excel</button>
+                            <button onclick="exportExcel(true)" class="bg-green-700 text-white text-xs px-3 py-2 rounded">Email + Excel</button>
+                        </div>
+                    </div>
+
+                    <!-- Maintenance Optimized -->
+                    <div class="break-before">
+                        <div class="flex justify-between items-center mb-4 border-b-2 border-slate-800 pb-2">
+                            <h3 class="font-bold text-slate-800 uppercase text-base">2. PEDIDO DE MANTENIMIENTO / DOCUMENTACIÓN / OTROS</h3>
+                            <button onclick="clearChecks()" class="text-red-500 text-xs font-bold print:hidden px-3 py-1 bg-red-50 rounded">Limpiar Selecciones</button>
+                        </div>
+
+                        ${(() => {
+                            const allItems = [...genericItems, ...specificItems];
+                            const groups = [...new Set(allItems.map(i => i.sub))];
+                            
+                            return groups.map(groupName => {
+                                const groupItems = allItems.filter(i => i.sub === groupName);
+                                let html = `<div class="mb-8">
+                                    <h4 class="bg-slate-800 text-white px-3 py-1 text-xs font-bold uppercase tracking-wider mb-2 rounded-t">${groupName}</h4>`;
+                                
+                                if (state.layoutMode === 'pc') {
+                                    html += `<div class="items-grid-pc">`;
+                                    groupItems.forEach(i => {
+                                        html += `
+                                        <div class="item-row-pc">
+                                            <span class="text-[13px] font-medium text-slate-700">${i.label}</span>
+                                            <div class="flex gap-2">
+                                                <label class="flex flex-col items-center">
+                                                    <span class="text-[8px] font-bold text-blue-600 uppercase mb-0.5">Prog</span>
+                                                    <input type="radio" name="chk_${i.id}" ${state.formData.checks[i.id]==='PROGRAMAR ADECUACIÓN'?'checked':''} onclick="toggleCheck('${i.id}', 'PROGRAMAR ADECUACIÓN')" class="w-4 h-4 cursor-pointer">
+                                                </label>
+                                                <label class="flex flex-col items-center">
+                                                    <span class="text-[8px] font-bold text-red-600 uppercase mb-0.5">Crítico</span>
+                                                    <input type="radio" name="chk_${i.id}" ${state.formData.checks[i.id]==='FALLA CRÍTICA'?'checked':''} onclick="toggleCheck('${i.id}', 'FALLA CRÍTICA')" class="w-4 h-4 cursor-pointer">
+                                                </label>
+                                            </div>
+                                        </div>`;
+                                    });
+                                    html += `</div>`;
+                                } else {
+                                    // Mobile view table
+                                    html += `
+                                    <table class="w-full text-xs border border-slate-200 rounded-b overflow-hidden shadow-sm">
+                                        <thead class="bg-slate-50 font-bold text-slate-600">
+                                            <tr class="divide-x">
+                                                <th class="p-2 text-left">Item</th>
+                                                <th class="p-2 w-24 text-blue-700 text-[9px] leading-tight text-center">PROGRAMAR ADECUACIÓN</th>
+                                                <th class="p-2 w-24 text-red-700 text-[9px] leading-tight text-center">FALLA CRÍTICA</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y">
+                                            ${groupItems.map((i, idx) => `
+                                                <tr class="${idx%2===0?'bg-white':'bg-slate-50'} hover:bg-yellow-50 divide-x transition-colors">
+                                                    <td class="p-2 font-medium">${i.label}</td>
+                                                    <td class="p-2 text-center"><input type="radio" name="chk_${i.id}" ${state.formData.checks[i.id]==='PROGRAMAR ADECUACIÓN'?'checked':''} onclick="toggleCheck('${i.id}', 'PROGRAMAR ADECUACIÓN')" class="w-5 h-5 cursor-pointer"></td>
+                                                    <td class="p-2 text-center"><input type="radio" name="chk_${i.id}" ${state.formData.checks[i.id]==='FALLA CRÍTICA'?'checked':''} onclick="toggleCheck('${i.id}', 'FALLA CRÍTICA')" class="w-5 h-5 cursor-pointer"></td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>`;
+                                }
+                                html += `</div>`;
+                                return html;
+                            }).join('');
+                        })()}
+                    </div>
+
+                    <!-- Footer Details -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 break-inside-avoid">
+                        <div>
+                            <label class="text-xs font-bold uppercase block">Observaciones</label>
+                            <textarea class="w-full h-20 border border-slate-300 p-2 text-sm rounded resize-none" onchange="updateForm('observations', this.value)">${state.formData.observations}</textarea>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold uppercase block mb-2">Urgencia *</label>
+                            <div class="flex gap-2 flex-wrap">
+                                ${Object.values(URGENCY).map(u => `
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer bg-slate-50 px-2 py-1 rounded border hover:border-red-400">
+                                        <input type="radio" name="urgency" value="${u}" ${state.formData.urgency===u?'checked':''} onclick="updateForm('urgency', '${u}')"> ${u}
+                                    </label>
+                                `).join('')}
+                            </div>
+                            <button onclick="sendMaintenanceAlert()" class="mt-4 w-full bg-red-600 text-white font-bold py-2 rounded shadow hover:bg-red-700 transition-colors print:hidden">ENVIAR PEDIDO</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+            
+            return html;
+        }
+
+        function renderHistoryModal() {
+            const historyList = state.history.filter(h => h.vehicleId === state.selectedVehicle.id);
+            const overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print:hidden';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+                    <div class="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-lg">
+                        <h3 class="font-bold">Historial: ${state.selectedVehicle.id}</h3>
+                        <button onclick="closeModal(this)" class="text-2xl leading-none">&times;</button>
+                    </div>
+                    <div class="p-0 overflow-y-auto flex-1">
+                        <table class="w-full text-sm">
+                            <thead class="bg-slate-100 sticky top-0">
+                                <tr><th class="p-3 text-left">Fecha</th><th class="p-3 text-left">Tipo</th><th class="p-3">Semana</th></tr>
+                            </thead>
+                            <tbody>
+                                ${historyList.length === 0 ? '<tr><td colspan="3" class="p-4 text-center">Sin registros</td></tr>' : 
+                                historyList.map(h => `
+                                    <tr class="border-b hover:bg-slate-50">
+                                        <td class="p-3">${new Date(h.timestamp).toLocaleDateString()}</td>
+                                        <td class="p-3"><span class="bg-slate-200 px-2 py-1 rounded text-xs">${h.type}</span></td>
+                                        <td class="p-3 text-center">${h.weekDate}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+        }
+
+        function closeModal(btn) {
+            btn.closest('.fixed').remove();
+            state.showHistoryModal = false;
+        }
+
+        // Run
+        init();
+    </script>
+</body>
+</html>
