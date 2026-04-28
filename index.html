@@ -112,6 +112,19 @@
             ring: 2px;
             ring-color: #b91c1c;
         }
+        
+        /* Animación de Guardado Exitoso */
+        @keyframes success-pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(0.95); background-color: #dcfce7; border-color: #22c55e; }
+            100% { transform: scale(1); }
+        }
+        .animate-success {
+            animation: success-pop 0.4s ease-out;
+            color: #166534 !important;
+            border-color: #22c55e !important;
+            background-color: #f0fdf4 !important;
+        }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
@@ -596,12 +609,19 @@
 
             localStorage.setItem('vehicle_history', JSON.stringify(state.history));
             if (type === 'Parcial') {
-                // Notificación silenciosa o simple
                 const saveBtn = document.querySelector('button[onclick*="saveRecord(\'Parcial\')"]');
                 if (saveBtn) {
-                    const originalText = saveBtn.innerHTML;
-                    saveBtn.innerHTML = '✅ GUARDADO';
-                    setTimeout(() => saveBtn.innerHTML = originalText, 2000);
+                    const originalHTML = saveBtn.innerHTML;
+                    const originalClass = saveBtn.className;
+                    
+                    // Aplicar estado de éxito
+                    saveBtn.innerHTML = '<span>✅</span> GUARDADO';
+                    saveBtn.classList.add('animate-success');
+                    
+                    setTimeout(() => {
+                        saveBtn.innerHTML = originalHTML;
+                        saveBtn.classList.remove('animate-success');
+                    }, 2000);
                 }
             }
             render();
