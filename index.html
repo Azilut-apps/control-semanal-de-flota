@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Control Semanal AZILUT</title>
-    
+
     <!-- PWA Meta Tags -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#b91c1c">
@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Azilut Flota">
     <link rel="apple-touch-icon" href="icon-192.png">
-    
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -37,7 +37,7 @@
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
+
         /* Custom PC Layout for items */
         .items-grid-pc {
             display: grid;
@@ -112,7 +112,7 @@
             ring: 2px;
             ring-color: #b91c1c;
         }
-        
+
         /* Animación de Guardado Exitoso */
         @keyframes success-pop {
             0% { transform: scale(1); }
@@ -128,7 +128,7 @@
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
-    
+
     <div id="app" class="pb-12"></div>
 
     <script>
@@ -142,6 +142,7 @@
         }
 
         // --- DATA INYECTADA ---
+        // Semilla local. Cuando Firestore responde (flota-nube.js), reemplaza esta lista.
         const vehicles = [
             {"id":"CA-02","description":"Pickup Ranger","year":2010,"brand":"Ford","domain":"KEF 062"},
             {"id":"CA-06","description":"Pickup Ranger","year":2010,"brand":"Ford","domain":"KFV 308"},
@@ -172,7 +173,7 @@
             {id: "g2", sub: "DOCUMENTACIÓN", label: "Seguro"},
             {id: "s2", sub: "DOCUMENTACIÓN", label: "VTV"},
             {id: "g45", sub: "DOCUMENTACIÓN", label: "Credencial autogestionable YPF"},
-            
+
             {id: "g5", sub: "ILUMINACIÓN", label: "Luces altas"},
             {id: "g6", sub: "ILUMINACIÓN", label: "Luces bajas"},
             {id: "g7", sub: "ILUMINACIÓN", label: "Luces freno"},
@@ -244,7 +245,7 @@
             {id: "s21", sub: "ESPECÍFICO", label: "Estaqueras y fajas de amarre"},
             {id: "s22", sub: "ESPECÍFICO", label: "Lonas"}
         ];
-        
+
         // --- CONFIG ---
         const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
         const KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
@@ -285,7 +286,7 @@
                     thursday: { oil: 'BUENO', water: 'BUENO', notes: '' },
                     friday: { oil: 'BUENO', water: 'BUENO', notes: '' },
                 },
-                checks: {}, 
+                checks: {},
                 urgency: null,
                 observations: '',
                 isCleanWeek: false
@@ -310,11 +311,11 @@
             const now = new Date();
             const currentMonth = now.getMonth();
             const currentYear = now.getFullYear();
-            
+
             return state.history.reduce((total, record) => {
                 const recDate = new Date(record.timestamp);
-                if (record.driverDni === dni && 
-                    recDate.getMonth() === currentMonth && 
+                if (record.driverDni === dni &&
+                    recDate.getMonth() === currentMonth &&
                     recDate.getFullYear() === currentYear) {
                     return total + (record.creditsAwarded || 0);
                 }
@@ -333,7 +334,7 @@
             }
 
             // 2. Aceite / Agua MALO
-            const hasMaloAW = KEYS.some(k => 
+            const hasMaloAW = KEYS.some(k =>
                 dailyChecks[k] && (dailyChecks[k].oil === 'MALO' || dailyChecks[k].water === 'MALO')
             );
             if (hasMaloAW) {
@@ -345,7 +346,7 @@
             const docIds = ['g1', 'g2', 's2', 'g45'];
             let hasDocPoints = false;
             let hasAccidentPoints = false;
-            
+
             Object.entries(checks).forEach(([id, status]) => {
                 const isDoc = docIds.includes(id);
                 if (isDoc) {
@@ -375,10 +376,10 @@
 
         function deleteRecord(id) {
             if (!confirm('¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.')) return;
-            
+
             state.history = state.history.filter(h => h.id !== id);
             localStorage.setItem('vehicle_history', JSON.stringify(state.history));
-            
+
             // Re-render
             if (state.showHistoryModal) {
                 // Eliminar el overlay actual y volver a abrir para refrescar
@@ -393,17 +394,17 @@
 
         function handleSearch(e) {
             state.searchTerm = e.target.value.toLowerCase();
-            renderList(); 
+            renderList();
         }
 
         function selectVehicle(id, targetDate = null) {
             state.selectedVehicle = vehicles.find(v => v.id === id);
             state.view = 'form';
-            
+
             // Cargar datos por defecto
             state.formData = initFormData();
             if (targetDate) state.formData.weekDate = targetDate;
-            
+
             // Cargar kilometraje recordado
             const mileages = JSON.parse(localStorage.getItem('vehicle_mileages') || '{}');
             if (mileages[id]) {
@@ -415,7 +416,7 @@
             const saved = state.history
                 .filter(r => r.vehicleId === id && r.weekDate === weekToSearch)
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
-            
+
             if (saved) {
                 state.formData = {
                     driverName: saved.driverName || (state.shouldFixUser ? state.fixedName : ''),
@@ -429,7 +430,7 @@
                     isCleanWeek: saved.isCleanWeek || false
                 };
             }
-            
+
             render();
         }
 
@@ -461,12 +462,12 @@
                 mileages[state.selectedVehicle.id] = value;
                 localStorage.setItem('vehicle_mileages', JSON.stringify(mileages));
             }
-            
+
             if (field === 'weekDate') {
                 const saved = state.history
                 .filter(r => r.vehicleId === state.selectedVehicle.id && r.weekDate === value)
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
-            
+
                 if (saved) {
                     state.formData = {
                         ...state.formData,
@@ -575,7 +576,7 @@
 
         function saveRecord(type) {
             const vehicle = state.selectedVehicle;
-            
+
             // Siempre se calculan créditos (proactivo)
             const result = calculatePoints(state.formData.checks, state.formData.dailyChecks, state.formData.isCleanWeek);
 
@@ -613,11 +614,11 @@
                 if (saveBtn) {
                     const originalHTML = saveBtn.innerHTML;
                     const originalClass = saveBtn.className;
-                    
+
                     // Aplicar estado de éxito
                     saveBtn.innerHTML = '<span>✅</span> GUARDADO';
                     saveBtn.classList.add('animate-success');
-                    
+
                     setTimeout(() => {
                         saveBtn.innerHTML = originalHTML;
                         saveBtn.classList.remove('animate-success');
@@ -638,7 +639,7 @@
                 ["DNI", state.formData.driverDni],
                 ["KM", state.formData.startMileage], ["FECHA", state.formData.weekDate], [""]
             ];
-            
+
             data.push(["DIA", "ACEITE", "AGUA", "NOTAS"]);
             KEYS.forEach((k, i) => {
                 const d = state.formData.dailyChecks[k];
@@ -648,14 +649,14 @@
 
             // Detalle por Categoría
             data.push(["CATEGORÍA / GRUPO", "ESTADO / HALLAZGOS"]);
-            
+
             const allItems = [...genericItems, ...specificItems];
             const groups = [...new Set(allItems.map(i => i.sub))];
-            
+
             groups.forEach(groupName => {
                 const groupItems = allItems.filter(i => i.sub === groupName);
                 const reportedInGroup = groupItems.filter(i => state.formData.checks[i.id]);
-                
+
                 if (reportedInGroup.length > 0) {
                     const detail = reportedInGroup.map(i => {
                         const status = state.formData.checks[i.id];
@@ -692,7 +693,7 @@
             const now = new Date();
             const currentMonth = now.getMonth();
             const currentYear = now.getFullYear();
-            
+
             const monthRecords = state.history.filter(r => {
                 const d = new Date(r.timestamp);
                 return r.driverDni === dni && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
@@ -701,7 +702,7 @@
             if (monthRecords.length === 0) return alert("No hay registros para este mes.");
 
             const wb = XLSX.utils.book_new();
-            
+
             // 1. Hoja de Resumen y Créditos
             const credits = calculateMonthlyCredits(dni);
             const summaryData = [
@@ -749,7 +750,7 @@
             applyAutoWidths(ws, allRows);
 
             XLSX.utils.book_append_sheet(wb, ws, "Consolidado Mensual");
-            
+
             const fname = `Informe_Mensual_${dni}_${currentYear}_${currentMonth+1}.xlsx`;
             XLSX.writeFile(wb, fname);
             alert("Informe mensual generado y descargado. Contiene el detalle de controles diarios y créditos acumulados.");
@@ -799,11 +800,11 @@
                 doc.setFontSize(8);
                 doc.text("DETALLE DE FALLAS:", margin, y);
                 y += 5;
-                
+
                 items.forEach(i => {
                     const status = i.status;
                     const isCritical = status === 'CRÍTICO. URGENCIA ALTA';
-                    
+
                     if (isCritical) {
                         doc.setFillColor(200, 0, 0);
                         doc.rect(margin, y - 2.5, 2, 2, 'F');
@@ -815,10 +816,10 @@
                     doc.setFontSize(7);
                     doc.setFont("helvetica", "normal");
                     doc.text(`${i.label}`, margin + 4, y);
-                    
+
                     doc.setFontSize(5);
                     doc.text(isCritical ? "URGENCIA ALTA" : "URGENCIA MEDIA", 65, y, { align: 'right' });
-                    
+
                     y += 4;
                     if (y > 185) { doc.addPage(); y = 10; }
                 });
@@ -865,7 +866,7 @@
 
         async function exportMaintenancePDF() {
             if (validate().length > 0) return alert(validate().join('\n'));
-            
+
             const recordData = {
                 vehicleId: state.selectedVehicle.id,
                 driverName: state.formData.driverName,
@@ -919,13 +920,13 @@
         function render() {
             const app = document.getElementById('app');
             app.innerHTML = '';
-            
+
             if (state.view === 'list') {
                 app.innerHTML = renderHeader() + renderVehicleList() + renderFooter();
             } else {
                 app.innerHTML = renderForm();
             }
-            
+
             if (state.showHistoryModal) renderHistoryModal();
         }
 
@@ -934,7 +935,7 @@
              if(listContainer) {
                  listContainer.outerHTML = renderVehicleList();
              } else {
-                 render(); 
+                 render();
              }
         }
 
@@ -945,7 +946,7 @@
                 <div class="max-w-6xl mx-auto px-8 py-6 flex justify-between items-center">
                     <div class="flex items-center gap-4">
                         <div>
-                            <h1 class="text-3xl font-black text-red-700 tracking-tight">AZILUT S.A.</h1>
+                            <h1 onclick="tapTitulo()" class="text-3xl font-black text-red-700 tracking-tight select-none">AZILUT S.A.</h1>
                             <h2 class="text-sm font-bold text-slate-400 uppercase">FO 57 Control Semanal</h2>
                         </div>
                         ${state.fixedDni ? `
@@ -987,16 +988,16 @@
         }
 
         function renderVehicleList() {
-            const filtered = vehicles.filter(v => 
-                v.id.toLowerCase().includes(state.searchTerm) || 
-                v.domain.toLowerCase().includes(state.searchTerm) || 
+            const filtered = vehicles.filter(v =>
+                v.id.toLowerCase().includes(state.searchTerm) ||
+                v.domain.toLowerCase().includes(state.searchTerm) ||
                 v.description.toLowerCase().includes(state.searchTerm)
             );
 
             let html = `
             <div id="vehicle-list-container" class="max-w-6xl mx-auto p-4 md:p-8">
                 <div class="mb-6 text-center max-w-2xl mx-auto flex flex-col md:flex-row gap-4">
-                    <input type="text" placeholder="Buscar vehículo o patente..." 
+                    <input type="text" placeholder="Buscar vehículo o patente..."
                         class="flex-1 p-3 rounded-xl border border-slate-200 shadow-sm text-base focus:ring-2 focus:ring-red-500 outline-none"
                         oninput="handleSearch(event)" value="${state.searchTerm}">
                     <button onclick="state.showHistoryModal=true; render()" class="bg-red-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-800 transition-colors flex items-center justify-center gap-2">
@@ -1033,7 +1034,7 @@
         function renderForm() {
             const v = state.selectedVehicle;
             const stats = getStats();
-            
+
             const btnClass = (val, target) => `w-8 h-8 rounded text-xs font-bold border flex items-center justify-center transition-colors ${val === target ? (target === 'BUENO' ? 'bg-green-600 text-white border-green-700' : 'bg-red-600 text-white border-red-700') : 'bg-slate-50 text-slate-300 border-slate-200'}`;
 
             let html = `
@@ -1043,14 +1044,15 @@
                     <button onclick="goBack()" class="mb-4 bg-slate-800 text-white px-3 py-1 text-xs rounded uppercase tracking-wide print:hidden">&larr; Volver</button>
                     <div class="flex flex-col md:flex-row justify-between gap-4">
                         <div>
-                            <h1 class="text-3xl font-black text-red-700 uppercase">AZILUT S.A.</h1>
+                            <h1 onclick="tapTitulo()" class="text-3xl font-black text-red-700 uppercase select-none">AZILUT S.A.</h1>
                             <h2 class="text-lg font-bold text-slate-800">FO 57 Control Semanal</h2>
                         </div>
-                        <div class="text-right print:hidden">
+                        <div class="text-right print:hidden flex gap-2 justify-end">
+                            <button onclick="abrirDocumentos()" class="bg-red-50 text-red-700 px-3 py-2 rounded text-xs font-bold border border-red-200">📄 Documentos</button>
                             <button onclick="state.showHistoryModal=true; render()" class="bg-slate-100 text-slate-700 px-3 py-2 rounded text-xs font-bold border border-slate-300">🕒 Ver Historial</button>
                         </div>
                     </div>
-                    
+
                     <div class="mt-4 bg-slate-50 p-4 rounded border border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 print:bg-white print:border-slate-800 print:border">
                         <div><span class="text-xs font-bold text-slate-400 uppercase block">Vehículo</span><span class="text-lg font-bold">${v.description} (${v.id})</span></div>
                         <div><span class="text-xs font-bold text-slate-400 uppercase block">Patente</span><span class="font-mono text-lg font-bold">${v.domain}</span></div>
@@ -1070,7 +1072,7 @@
                         </div>
                         <div class="md:col-span-4 flex flex-col justify-end gap-2">
                             <label class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border-2 border-slate-100 cursor-pointer hover:bg-slate-100 transition-all group">
-                                <input type="checkbox" class="w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-red-500" ${state.shouldFixUser ? 'checked' : ''} onchange="toggleFixUser()"> 
+                                <input type="checkbox" class="w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-red-500" ${state.shouldFixUser ? 'checked' : ''} onchange="toggleFixUser()">
                                 <span class="text-[11px] font-black text-slate-500 uppercase tracking-tight group-hover:text-red-700">Recordar mis datos</span>
                             </label>
                             ${state.formData.driverDni ? `
@@ -1096,7 +1098,7 @@
                     <div>
                         <h3 class="font-bold text-slate-800 mb-2 border-b pb-1 uppercase text-sm">1. Control Diario</h3>
                         ${stats.bad >= 3 ? '<div class="bg-red-100 text-red-800 p-2 mb-2 text-xs font-bold rounded border-l-4 border-red-600">🚨 ALERTA: 3+ Fallas detectadas.</div>' : ''}
-                        
+
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm border-collapse border border-slate-200">
                                 <thead>
@@ -1140,7 +1142,7 @@
                             </table>
                         </div>
                         </div>
-                        
+
                         <!-- Toggle Semana sin Fallas -->
                         <div class="mt-8 mb-4 p-6 rounded-[2rem] border-2 transition-all flex flex-col md:flex-row items-center justify-between gap-4 ${state.formData.isCleanWeek ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100'}">
                             <div class="flex items-center gap-4">
@@ -1159,12 +1161,12 @@
                         </div>
 
                         <div class="mt-4 flex flex-col md:flex-row gap-4 justify-end print:hidden">
-                            <button onclick="saveRecord('Parcial')" 
+                            <button onclick="saveRecord('Parcial')"
                                 ${!isFormValid() ? 'disabled' : ''}
                                 class="btn-light-slate font-bold px-8 py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 group ${!isFormValid() ? 'opacity-30 grayscale cursor-not-allowed' : ''}">
                                 <span class="text-xl group-hover:scale-110 transition-transform">💾</span> GUARDAR PROGRESO
                             </button>
-                            <button onclick="state.showReportSelector = true; render()" 
+                            <button onclick="state.showReportSelector = true; render()"
                                 ${!isFormValid() ? 'disabled' : ''}
                                 class="btn-light-red font-bold px-10 py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 group ${!isFormValid() ? 'opacity-30 grayscale cursor-not-allowed' : ''}">
                                 <span class="text-xl group-hover:rotate-12 transition-transform">📤</span> EMITIR REPORTE
@@ -1191,12 +1193,12 @@
                         ${(() => {
                             const allItems = [...genericItems, ...specificItems];
                             const groups = [...new Set(allItems.map(i => i.sub))];
-                            
+
                             return groups.map(groupName => {
                                 const groupItems = allItems.filter(i => i.sub === groupName);
                                 let html = `<div class="mb-6">
                                     <h4 class="bg-slate-800 text-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider mb-2 rounded-t">${groupName}</h4>`;
-                                
+
                                 html += `<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2">`;
                                 groupItems.forEach(i => {
                                     const status = state.formData.checks[i.id];
@@ -1211,7 +1213,7 @@
                                     }
 
                                     html += `
-                                    <div onclick="cycleCheck('${i.id}')" 
+                                    <div onclick="cycleCheck('${i.id}')"
                                         class="flex items-center justify-center p-2 border rounded-md text-[10px] font-bold cursor-pointer transition-all ${bg} text-center h-12 leading-tight select-none active:scale-95">
                                         ${i.label}${badge}
                                     </div>`;
@@ -1231,7 +1233,7 @@
                         </div>
                         <div>
                             <label class="text-xs font-bold uppercase block mb-2">Acción</label>
-                            <button onclick="exportMaintenancePDF()" 
+                            <button onclick="exportMaintenancePDF()"
                                 ${!isFormValid() ? 'disabled' : ''}
                                 class="border-2 border-red-500 bg-red-600/5 text-red-600 font-black py-5 px-8 rounded-2xl hover:bg-red-600 hover:text-white hover:shadow-xl transition-all print:hidden uppercase tracking-tighter flex flex-col items-center justify-center gap-1 w-full text-xl shadow-lg ring-4 ring-red-50 ${!isFormValid() ? 'opacity-30 grayscale cursor-not-allowed' : ''}">
                                 <span>📥 DESCARGAR TICKET PEDIDO</span>
@@ -1241,12 +1243,12 @@
                     </div>
                 </div>
             </div>`;
-            
+
             return html;
         }
 
         function renderHistoryModal() {
-            const historyList = state.selectedVehicle 
+            const historyList = state.selectedVehicle
                 ? state.history.filter(h => h.vehicleId === state.selectedVehicle.id)
                 : state.history;
 
@@ -1285,7 +1287,7 @@
                                 <div class="text-4xl mb-2 opacity-20">📭</div>
                                 <p class="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Sin actividad registrada</p>
                             </div>
-                        ` : 
+                        ` :
                         historyList.map(h => `
                             <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
                                 <div class="absolute top-0 left-0 w-1 h-full ${h.type === 'Parcial' ? 'bg-slate-300' : 'bg-red-500'}"></div>
@@ -1326,7 +1328,7 @@
                             </div>
                         `).join('')}
                     </div>
-                    
+
                     <!-- Footer Info -->
                     <div class="p-6 bg-white border-t border-slate-100 flex items-center justify-between">
                         <div class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
@@ -1356,7 +1358,7 @@
                         <h3 class="text-xl font-black text-slate-800 uppercase tracking-tight">Emitir Reporte</h3>
                         <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Seleccioná el período</p>
                     </div>
-                    
+
                     <div class="p-6 space-y-2">
                         <div class="grid grid-cols-1 gap-2">
                             <button onclick="selectReportPeriod('day')" class="report-option w-full p-4 rounded-2xl flex items-center gap-3 text-left group ${state.selectedReportPeriod === 'day' ? 'selected' : ''}">
@@ -1366,7 +1368,7 @@
                                     <div class="text-[9px] text-slate-400 uppercase">Control de hoy</div>
                                 </div>
                             </button>
-                            
+
                             <button onclick="selectReportPeriod('week')" class="report-option w-full p-4 rounded-2xl flex items-center gap-3 text-left group ${state.selectedReportPeriod === 'week' ? 'selected' : ''}">
                                 <span class="text-xl group-hover:scale-110 transition-transform">📅</span>
                                 <div>
@@ -1384,7 +1386,7 @@
                                     </div>
                                     <span id="range-chevron" class="text-slate-300 transition-transform" style="${state.selectedReportPeriod === 'range' ? 'transform: rotate(180deg)' : ''}">↓</span>
                                 </button>
-                                
+
                                 <div id="range-inputs" class="${state.selectedReportPeriod === 'range' ? '' : 'hidden'} px-4 pb-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
                                     <div class="grid grid-cols-2 gap-2">
                                         <div>
@@ -1430,10 +1432,10 @@
         function processReport(btn) {
             const rangeFrom = document.getElementById('report-from')?.value;
             const rangeTo = document.getElementById('report-to')?.value;
-            
+
             // Lógica de créditos al emitir reporte
-            saveRecord('Reporte Semanal'); 
-            
+            saveRecord('Reporte Semanal');
+
             if (state.selectedReportPeriod === 'month') {
                 exportMonthlyReport();
             } else if (state.selectedReportPeriod === 'range') {
@@ -1446,20 +1448,20 @@
             } else {
                 exportExcel(false);
             }
-            
+
             closeReportSelector(btn);
         }
 
         function render() {
             const app = document.getElementById('app');
             app.innerHTML = '';
-            
+
             if (state.view === 'list') {
                 app.innerHTML = renderHeader() + renderVehicleList() + renderFooter();
             } else {
                 app.innerHTML = renderForm();
             }
-            
+
             if (state.showHistoryModal) renderHistoryModal();
             if (state.showReportSelector) renderReportSelector();
         }
@@ -1467,7 +1469,7 @@
         function loadHistoryRecord(id) {
             const record = state.history.find(h => h.id === id);
             if (!record) return;
-            
+
             selectVehicle(record.vehicleId, record.weekDate);
             state.formData = {
                 ...state.formData,
@@ -1479,7 +1481,7 @@
                 observations: record.generalObservations,
                 isCleanWeek: record.isCleanWeek || false
             };
-            
+
             // Cerrar modal
             const overlay = document.querySelector('.history-modal-overlay');
             if (overlay) overlay.remove();
@@ -1507,5 +1509,8 @@
         // Run
         init();
     </script>
+
+    <!-- Capa nube: Firestore + Authentication (ver flota-nube.js) -->
+    <script type="module" src="flota-nube.js"></script>
 </body>
 </html>
