@@ -339,41 +339,64 @@ async function toggleBaja(id) {
 // ---------- carga inicial y de prueba (solo administrador) ----------
 
 async function cargarIniciales() {
-  if (!usuarioAdmin) return;
-  const batch = writeBatch(db);
-  LISTADO_INICIAL.forEach(v => {
-    batch.set(doc(db, "vehiculos", v.id), {
-      descripcion: v.description,
-      marca: v.brand,
-      anio: v.year,
-      patente: v.domain,
-      extintorVencimiento: "",
-      activo: true
+  if (!usuarioAdmin) {
+    alert("Debés iniciar sesión como administrador.");
+    return;
+  }
+  try {
+    const batch = writeBatch(db);
+    LISTADO_INICIAL.forEach(v => {
+      batch.set(doc(db, "vehiculos", v.id), {
+        descripcion: v.description,
+        marca: v.brand,
+        anio: v.year,
+        patente: v.domain,
+        extintorVencimiento: "",
+        activo: true
+      });
     });
-  });
-  await batch.commit();
+    await batch.commit();
+    alert("¡Unidades iniciales cargadas con éxito en Firestore!");
+  } catch (e) {
+    console.error(e);
+    alert("Error al cargar unidades: " + e.message);
+  }
 }
 
 // Datos de prueba: fechas ficticias para probar semáforo y botón Ver PDF (sin archivo).
 async function cargarPrueba() {
-  if (!usuarioAdmin) return;
-  const fechas = ["2026-12-15", "2027-06-30", "2026-11-10", "2027-02-28"];
-  const batch = writeBatch(db);
-  unidadesNube.filter(u => u.activo !== false).forEach(u => {
-    const pat = u.patente.replace(/\s+/g, "").toUpperCase();
-    TIPOS_DOC.forEach((t, i) => {
-      batch.set(doc(db, "documentos", `${pat}_${t.id}`), {
-        patente: pat,
-        vehiculoId: u.id,
-        tipo: t.id,
-        vencimiento: fechas[i],
-        archivoNombre: "",
-        archivoUrl: "",
-        actualizado: new Date().toISOString()
-      }, { merge: true });
+  if (!usuarioAdmin) {
+    alert("Debés iniciar sesión como administrador.");
+    return;
+  }
+  const unidadesActivas = unidadesNube.filter(u => u.activo !== false);
+  if (unidadesActivas.length === 0) {
+    alert("No hay unidades registradas en la base. Hacé clic primero en 'Cargar unidades iniciales'.");
+    return;
+  }
+  try {
+    const fechas = ["2026-12-15", "2027-06-30", "2026-11-10", "2027-02-28"];
+    const batch = writeBatch(db);
+    unidadesActivas.forEach(u => {
+      const pat = u.patente.replace(/\s+/g, "").toUpperCase();
+      TIPOS_DOC.forEach((t, i) => {
+        batch.set(doc(db, "documentos", `${pat}_${t.id}`), {
+          patente: pat,
+          vehiculoId: u.id,
+          tipo: t.id,
+          vencimiento: fechas[i],
+          archivoNombre: "",
+          archivoUrl: "",
+          actualizado: new Date().toISOString()
+        }, { merge: true });
+      });
     });
-  });
-  await batch.commit();
+    await batch.commit();
+    alert("¡Documentos de prueba cargados con éxito! Ya podés revisar el botón Documentos.");
+  } catch (e) {
+    console.error(e);
+    alert("Error al cargar documentos de prueba: " + e.message);
+  }
 }
 
 // ---------- exposición a los onclick del HTML ----------
