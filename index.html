@@ -173,6 +173,7 @@
             {id: "g2", sub: "DOCUMENTACIÓN", label: "Seguro"},
             {id: "s2", sub: "DOCUMENTACIÓN", label: "VTV"},
             {id: "g45", sub: "DOCUMENTACIÓN", label: "Credencial autogestionable YPF"},
+            {id: "g46", sub: "DOCUMENTACIÓN", label: "Llave activadora No funciona"},
 
             {id: "g5", sub: "ILUMINACIÓN", label: "Luces altas"},
             {id: "g6", sub: "ILUMINACIÓN", label: "Luces bajas"},
@@ -247,8 +248,9 @@
         ];
 
         // --- CONFIG ---
-        const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-        const KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+        const KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        const EMAIL_DESTINO = 'juan.pablo.medina@azilutsa.com.ar';
         const URGENCY = { VERY_HIGH: 'MUY ALTA', HIGH: 'ALTA', MEDIUM: 'MEDIA', LOW: 'BAJA' };
 
         // --- STATE ---
@@ -285,6 +287,8 @@
                     wednesday: { oil: 'BUENO', water: 'BUENO', notes: '' },
                     thursday: { oil: 'BUENO', water: 'BUENO', notes: '' },
                     friday: { oil: 'BUENO', water: 'BUENO', notes: '' },
+                    saturday: { oil: 'BUENO', water: 'BUENO', notes: '' },
+                    sunday: { oil: 'BUENO', water: 'BUENO', notes: '' },
                 },
                 checks: {},
                 urgency: null,
@@ -423,7 +427,7 @@
                     driverDni: saved.driverDni || (state.shouldFixUser ? state.fixedDni : ''),
                     startMileage: saved.startMileage || state.formData.startMileage,
                     weekDate: saved.weekDate,
-                    dailyChecks: saved.dailyChecks || initFormData().dailyChecks,
+                    dailyChecks: { ...initFormData().dailyChecks, ...(saved.dailyChecks || {}) },
                     checks: saved.checkStatus || {},
                     urgency: saved.urgency || null,
                     observations: saved.generalObservations || '',
@@ -442,6 +446,7 @@
 
         function updateForm(field, value, day = null, subField = null) {
             if (day) {
+                if (!state.formData.dailyChecks[day]) state.formData.dailyChecks[day] = { oil: 'BUENO', water: 'BUENO', notes: '' };
                 state.formData.dailyChecks[day][subField] = value;
                 if (value === 'MALO') state.formData.isCleanWeek = false;
             } else {
@@ -473,7 +478,7 @@
                         ...state.formData,
                         driverName: saved.driverName,
                         startMileage: saved.startMileage,
-                        dailyChecks: saved.dailyChecks,
+                        dailyChecks: { ...initFormData().dailyChecks, ...(saved.dailyChecks || {}) },
                         checks: saved.checkStatus,
                         urgency: saved.urgency,
                         observations: saved.generalObservations
@@ -489,6 +494,7 @@
                     state.formData.startMileage = currentKm;
                 }
             }
+            autoSaveRecord('Auto');
             render();
         }
 
@@ -520,6 +526,7 @@
             } else {
                 delete state.formData.checks[itemId];
             }
+            autoSaveRecord('Auto');
             render();
         }
 
@@ -543,6 +550,7 @@
 
         function resetDailyChecks() {
             KEYS.forEach(k => {
+                if (!state.formData.dailyChecks[k]) state.formData.dailyChecks[k] = { oil: 'BUENO', water: 'BUENO', notes: '' };
                 state.formData.dailyChecks[k].oil = 'BUENO';
                 state.formData.dailyChecks[k].water = 'BUENO';
             });
@@ -552,7 +560,7 @@
             let bad = 0, good = 0;
             const total = KEYS.length * 2;
             KEYS.forEach(k => {
-                const d = state.formData.dailyChecks[k];
+                const d = state.formData.dailyChecks[k] || { oil: 'BUENO', water: 'BUENO' };
                 if(d.oil === 'MALO') bad++;
                 if(d.oil === 'BUENO') good++;
                 if(d.water === 'MALO') bad++;
@@ -572,6 +580,154 @@
 
         function isFormValid() {
             return state.formData.driverName && state.formData.driverDni && state.formData.startMileage && state.formData.weekDate;
+        }
+
+        function autoSaveRecord(type = 'Automático') {
+            if (!state.selectedVehicle || !isFormValid()) return false;
+            const vehicle = state.selectedVehicle;
+            const result = calculatePoints(state.formData.checks, state.formData.dailyChecks, state.formData.isCleanWeek);
+
+            const record = {
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString(),
+                vehicleId: vehicle.id,
+                driverName: state.formData.driverName,
+                driverDni: state.formData.driverDni,
+                startMileage: state.formData.startMileage,
+                weekDate: state.formData.weekDate,
+                type: type,
+                creditsAwarded: result.pts,
+                creditReasons: result.messages,
+                isCleanWeek: state.formData.isCleanWeek,
+                dailyChecks: JSON.parse(JSON.stringify(state.formData.dailyChecks)),
+                checkStatus: JSON.parse(JSON.stringify(state.formData.checks)),
+                generalObservations: state.formData.observations,
+                reportedItems: [...genericItems, ...specificItems]
+                    .filter(i => state.formData.checks[i.id])
+                    .map(i => ({ label: i.label, sub: i.sub, status: state.formData.checks[i.id], id: i.id }))
+            };
+
+            const existingIdx = state.history.findIndex(h => h.vehicleId === vehicle.id && h.weekDate === state.formData.weekDate);
+            if (existingIdx !== -1) {
+                state.history[existingIdx] = record;
+            } else {
+                state.history.unshift(record);
+            }
+            localStorage.setItem('vehicle_history', JSON.stringify(state.history));
+            return true;
+        }
+
+        function dispararCorreoControlDiario() {
+            if (validate().length > 0) return alert(validate().join('\n'));
+            autoSaveRecord('Control Diario');
+            const v = state.selectedVehicle;
+            const fallas = [];
+            KEYS.forEach((k, i) => {
+                const d = state.formData.dailyChecks[k] || {};
+                if (d.oil === 'MALO') fallas.push(`- ${DAYS[i]}: Aceite en MAL estado${d.notes ? ' (' + d.notes + ')' : ''}`);
+                if (d.water === 'MALO') fallas.push(`- ${DAYS[i]}: Agua en MAL estado${d.notes ? ' (' + d.notes + ')' : ''}`);
+            });
+
+            const subject = encodeURIComponent(`[FO57 ALERTA CONTROL DIARIO] ${v.id} (${v.domain}) - ${state.formData.driverName}`);
+            const detalle = fallas.length > 0
+                ? `Se detectaron anomalías en el control diario:\n${fallas.join('\n')}`
+                : `Reporte de control diario semanal sin fallas registradas.`;
+            const body = encodeURIComponent(
+                `Unidad: ${v.id} - ${v.description} (${v.domain})\n` +
+                `Conductor: ${state.formData.driverName} (DNI: ${state.formData.driverDni})\n` +
+                `Km Inicio: ${state.formData.startMileage}\n` +
+                `Fecha: ${state.formData.weekDate}\n\n` +
+                `${detalle}\n\n` +
+                `Observaciones: ${state.formData.observations || 'Ninguna'}`
+            );
+            window.location.href = `mailto:${EMAIL_DESTINO}?subject=${subject}&body=${body}`;
+        }
+
+        function dispararCorreoPedido() {
+            if (validate().length > 0) return alert(validate().join('\n'));
+            autoSaveRecord('Pedido Mantenimiento');
+            const v = state.selectedVehicle;
+            const items = [...genericItems, ...specificItems]
+                .filter(i => state.formData.checks[i.id])
+                .map(i => `- [${state.formData.checks[i.id]}] ${i.sub}: ${i.label}`);
+
+            if (items.length === 0 && !state.formData.observations) {
+                return alert("No hay ítems marcados ni observaciones para enviar.");
+            }
+
+            const tieneAlta = items.some(x => x.includes('URGENCIA ALTA'));
+            const nivel = tieneAlta ? 'URGENCIA ALTA' : 'URGENCIA MEDIA';
+            const subject = encodeURIComponent(`[FO57 PEDIDO ${nivel}] ${v.id} (${v.domain}) - ${state.formData.driverName}`);
+            const body = encodeURIComponent(
+                `PEDIDO DE MANTENIMIENTO / DOCUMENTACIÓN\n` +
+                `Unidad: ${v.id} - ${v.description} (${v.domain})\n` +
+                `Conductor: ${state.formData.driverName} (DNI: ${state.formData.driverDni})\n` +
+                `Km Inicio: ${state.formData.startMileage}\n` +
+                `Fecha: ${state.formData.weekDate}\n\n` +
+                `Ítems reportados:\n${items.length > 0 ? items.join('\n') : 'Sin ítems marcados'}\n\n` +
+                `Observaciones: ${state.formData.observations || 'Ninguna'}`
+            );
+            window.location.href = `mailto:${EMAIL_DESTINO}?subject=${subject}&body=${body}`;
+        }
+
+        function imprimirPlanillaEnBlanco() {
+            const groups = [...new Set(genericItems.map(i => i.sub))];
+            const diasHeader = DAYS.map(d => `<th style="border:1px solid #333;padding:4px;text-align:center;font-size:10px;">${d}</th>`).join('');
+            const celdasBM = DAYS.map(() => `<td style="border:1px solid #333;padding:4px;text-align:center;font-size:10px;">B [ ] &nbsp; M [ ]</td>`).join('');
+            const celdasVacias = DAYS.map(() => `<td style="border:1px solid #333;padding:8px;"></td>`).join('');
+
+            const gruposHTML = groups.map(g => {
+                const items = genericItems.filter(i => i.sub === g);
+                const rows = items.map(it => `
+                    <div style="border:1px solid #cbd5e1;padding:4px 6px;font-size:9px;display:flex;justify-content:space-between;align-items:center;">
+                        <span>${it.label}</span>
+                        <span style="white-space:nowrap;margin-left:4px;">[ ] Med [ ] Alta</span>
+                    </div>`).join('');
+                return `
+                    <div style="margin-bottom:8px;break-inside:avoid;">
+                        <div style="background:#1e293b;color:#fff;font-size:9px;font-weight:bold;padding:2px 6px;text-transform:uppercase;">${g}</div>
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding-top:3px;">${rows}</div>
+                    </div>`;
+            }).join('');
+
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <html><head><title>FO 57 - Planilla en Blanco</title>
+                <style>
+                    @page { size: A4 portrait; margin: 10mm; }
+                    body { font-family: Arial, sans-serif; color: #000; margin: 0; }
+                </style></head><body>
+                <div style="display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:10px;">
+                    <div><strong style="font-size:15px;">AZILUT S.A. - FO 57 CONTROL SEMANAL DE VEHÍCULOS</strong></div>
+                    <div style="font-size:11px;">Planilla Física Alternativa</div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:11px;margin-bottom:10px;">
+                    <div style="border-bottom:1px solid #666;padding:3px 0;"><strong>Unidad / Dominio:</strong></div>
+                    <div style="border-bottom:1px solid #666;padding:3px 0;"><strong>Km Inicio:</strong></div>
+                    <div style="border-bottom:1px solid #666;padding:3px 0;"><strong>Semana / Fecha:</strong> ____/____/202__</div>
+                    <div style="border-bottom:1px solid #666;padding:3px 0;grid-column:span 2;"><strong>Conductor (Apellido y Nombre):</strong></div>
+                    <div style="border-bottom:1px solid #666;padding:3px 0;"><strong>DNI:</strong></div>
+                </div>
+                <div style="font-size:11px;font-weight:bold;margin-bottom:4px;text-transform:uppercase;">1. Control Diario (Marcar B: Bueno / M: Malo)</div>
+                <table style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+                    <thead><tr style="background:#f1f5f9;"><th style="border:1px solid #333;padding:4px;font-size:10px;text-align:left;">Ítem</th>${diasHeader}</tr></thead>
+                    <tbody>
+                        <tr><td style="border:1px solid #333;padding:4px;font-size:10px;font-weight:bold;">Aceite</td>${celdasBM}</tr>
+                        <tr><td style="border:1px solid #333;padding:4px;font-size:10px;font-weight:bold;">Agua</td>${celdasBM}</tr>
+                        <tr><td style="border:1px solid #333;padding:4px;font-size:10px;font-weight:bold;">Notas</td>${celdasVacias}</tr>
+                    </tbody>
+                </table>
+                <div style="font-size:11px;font-weight:bold;margin-bottom:4px;text-transform:uppercase;">2. Pedido de Mantenimiento / Documentación / Otros</div>
+                ${gruposHTML}
+                <div style="border:1px solid #333;height:45px;padding:4px;font-size:10px;margin-top:8px;"><strong>Observaciones generales:</strong></div>
+                <div style="display:flex;justify-content:space-between;margin-top:20px;font-size:10px;">
+                    <div style="border-top:1px solid #000;width:40%;text-align:center;padding-top:3px;">Firma del Conductor</div>
+                    <div style="border-top:1px solid #000;width:40%;text-align:center;padding-top:3px;">Firma Responsable / Encargado</div>
+                </div>
+                <script>window.onload = function() { window.print(); };<\/script>
+                </body></html>
+            `);
+            win.document.close();
         }
 
         function saveRecord(type) {
@@ -996,12 +1152,15 @@
 
             let html = `
             <div id="vehicle-list-container" class="max-w-6xl mx-auto p-4 md:p-8">
-                <div class="mb-6 text-center max-w-2xl mx-auto flex flex-col md:flex-row gap-4">
+                <div class="mb-6 text-center max-w-4xl mx-auto flex flex-col md:flex-row gap-3">
                     <input type="text" placeholder="Buscar vehículo o patente..."
                         class="flex-1 p-3 rounded-xl border border-slate-200 shadow-sm text-base focus:ring-2 focus:ring-red-500 outline-none"
                         oninput="handleSearch(event)" value="${state.searchTerm}">
-                    <button onclick="state.showHistoryModal=true; render()" class="bg-red-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-800 transition-colors flex items-center justify-center gap-2">
+                    <button onclick="state.showHistoryModal=true; render()" class="bg-red-700 text-white px-5 py-3 rounded-xl font-bold shadow-lg hover:bg-red-800 transition-colors flex items-center justify-center gap-2 text-sm">
                         🕒 VER HISTORIAL / RESGUARDO
+                    </button>
+                    <button onclick="imprimirPlanillaEnBlanco()" class="bg-slate-800 text-white px-5 py-3 rounded-xl font-bold shadow-lg hover:bg-slate-900 transition-colors flex items-center justify-center gap-2 text-sm">
+                        🖨️ IMPRIMIR PLANILLA EN BLANCO
                     </button>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">`;
@@ -1110,33 +1269,38 @@
                                 <tbody>
                                     <tr>
                                         <td class="border p-2 font-bold">Aceite</td>
-                                        ${KEYS.map(k => `
+                                        ${KEYS.map(k => {
+                                            const d = state.formData.dailyChecks[k] || { oil: 'BUENO', water: 'BUENO', notes: '' };
+                                            return `
                                             <td class="border p-2 text-center">
                                                 <div class="flex justify-center gap-1 print:hidden">
-                                                    <button onclick="updateForm(null, 'BUENO', '${k}', 'oil')" class="${btnClass(state.formData.dailyChecks[k].oil, 'BUENO')}">B</button>
-                                                    <button onclick="updateForm(null, 'MALO', '${k}', 'oil')" class="${btnClass(state.formData.dailyChecks[k].oil, 'MALO')}">M</button>
+                                                    <button onclick="updateForm(null, 'BUENO', '${k}', 'oil')" class="${btnClass(d.oil, 'BUENO')}">B</button>
+                                                    <button onclick="updateForm(null, 'MALO', '${k}', 'oil')" class="${btnClass(d.oil, 'MALO')}">M</button>
                                                 </div>
-                                                <span class="hidden print:block font-bold">${state.formData.dailyChecks[k].oil || '-'}</span>
-                                            </td>
-                                        `).join('')}
+                                                <span class="hidden print:block font-bold">${d.oil || '-'}</span>
+                                            </td>`;
+                                        }).join('')}
                                     </tr>
                                     <tr class="bg-slate-50">
                                         <td class="border p-2 font-bold">Agua</td>
-                                        ${KEYS.map(k => `
+                                        ${KEYS.map(k => {
+                                            const d = state.formData.dailyChecks[k] || { oil: 'BUENO', water: 'BUENO', notes: '' };
+                                            return `
                                             <td class="border p-2 text-center">
                                                 <div class="flex justify-center gap-1 print:hidden">
-                                                    <button onclick="updateForm(null, 'BUENO', '${k}', 'water')" class="${btnClass(state.formData.dailyChecks[k].water, 'BUENO')}">B</button>
-                                                    <button onclick="updateForm(null, 'MALO', '${k}', 'water')" class="${btnClass(state.formData.dailyChecks[k].water, 'MALO')}">M</button>
+                                                    <button onclick="updateForm(null, 'BUENO', '${k}', 'water')" class="${btnClass(d.water, 'BUENO')}">B</button>
+                                                    <button onclick="updateForm(null, 'MALO', '${k}', 'water')" class="${btnClass(d.water, 'MALO')}">M</button>
                                                 </div>
-                                                <span class="hidden print:block font-bold">${state.formData.dailyChecks[k].water || '-'}</span>
-                                            </td>
-                                        `).join('')}
+                                                <span class="hidden print:block font-bold">${d.water || '-'}</span>
+                                            </td>`;
+                                        }).join('')}
                                     </tr>
                                     <tr>
                                         <td class="border p-2 font-bold text-xs">Notas</td>
-                                        ${KEYS.map(k => `
-                                            <td class="border p-2"><input type="text" class="w-full text-xs bg-transparent outline-none" placeholder="..." value="${state.formData.dailyChecks[k].notes}" onchange="updateForm(null, this.value, '${k}', 'notes')"></td>
-                                        `).join('')}
+                                        ${KEYS.map(k => {
+                                            const d = state.formData.dailyChecks[k] || { oil: 'BUENO', water: 'BUENO', notes: '' };
+                                            return `<td class="border p-2"><input type="text" class="w-full text-xs bg-transparent outline-none" placeholder="..." value="${d.notes || ''}" onchange="updateForm(null, this.value, '${k}', 'notes')"></td>`;
+                                        }).join('')}
                                     </tr>
                                 </tbody>
                             </table>
@@ -1155,21 +1319,17 @@
                                 </div>
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" class="sr-only peer" ${state.formData.isCleanWeek ? 'checked' : ''} onchange="state.formData.isCleanWeek = this.checked; if(this.checked) { clearChecks(); resetDailyChecks(); } render()">
+                                <input type="checkbox" class="sr-only peer" ${state.formData.isCleanWeek ? 'checked' : ''} onchange="state.formData.isCleanWeek = this.checked; if(this.checked) { clearChecks(); resetDailyChecks(); autoSaveRecord('Semana sin Fallas'); } else { autoSaveRecord('Auto'); } render()">
                                 <div class="w-14 h-8 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-green-600 shadow-inner"></div>
                             </label>
                         </div>
 
-                        <div class="mt-4 flex flex-col md:flex-row gap-4 justify-end print:hidden">
-                            <button onclick="saveRecord('Parcial')"
-                                ${!isFormValid() ? 'disabled' : ''}
-                                class="btn-light-slate font-bold px-8 py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 group ${!isFormValid() ? 'opacity-30 grayscale cursor-not-allowed' : ''}">
-                                <span class="text-xl group-hover:scale-110 transition-transform">💾</span> GUARDAR PROGRESO
-                            </button>
-                            <button onclick="state.showReportSelector = true; render()"
+                        <div class="mt-4 flex flex-col md:flex-row gap-4 justify-between items-center print:hidden">
+                            <span class="text-xs font-bold text-slate-400">${isFormValid() ? '✅ Guardado automático activo en historial' : '⚠️ Completá conductor, DNI, Km y fecha para guardar'}</span>
+                            <button onclick="dispararCorreoControlDiario()"
                                 ${!isFormValid() ? 'disabled' : ''}
                                 class="btn-light-red font-bold px-10 py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 group ${!isFormValid() ? 'opacity-30 grayscale cursor-not-allowed' : ''}">
-                                <span class="text-xl group-hover:rotate-12 transition-transform">📤</span> EMITIR REPORTE
+                                <span class="text-xl group-hover:rotate-12 transition-transform">📧</span> DISPARAR CORREO
                             </button>
                         </div>
                     </div>
@@ -1233,11 +1393,11 @@
                         </div>
                         <div>
                             <label class="text-xs font-bold uppercase block mb-2">Acción</label>
-                            <button onclick="exportMaintenancePDF()"
+                            <button onclick="dispararCorreoPedido()"
                                 ${!isFormValid() ? 'disabled' : ''}
                                 class="border-2 border-red-500 bg-red-600/5 text-red-600 font-black py-5 px-8 rounded-2xl hover:bg-red-600 hover:text-white hover:shadow-xl transition-all print:hidden uppercase tracking-tighter flex flex-col items-center justify-center gap-1 w-full text-xl shadow-lg ring-4 ring-red-50 ${!isFormValid() ? 'opacity-30 grayscale cursor-not-allowed' : ''}">
-                                <span>📥 DESCARGAR TICKET PEDIDO</span>
-                                <span class="text-[10px] font-bold opacity-70 tracking-widest">(FORMATO PDF ESTRECHO)</span>
+                                <span>📧 DISPARAR CORREO DE PEDIDO</span>
+                                <span class="text-[10px] font-bold opacity-70 tracking-widest">(ENVÍA ÍTEMS EN AZUL / ROJO A MANTENIMIENTO)</span>
                             </button>
                         </div>
                     </div>
