@@ -126,6 +126,37 @@ onSnapshot(collection(db, "documentos"), snap => {
   if (modalAbierto("docs-modal")) renderDocs();
 }, err => console.error("documentos:", err));
 
+onSnapshot(collection(db, "historial"), snap => {
+  const nube = snap.docs.map(d => d.data());
+  if (nube.length > 0 && window.state) {
+    // Fusionar historial nube con local sin duplicar (clave: vehicleId + weekDate)
+    const mapa = new Map();
+    (window.state.history || []).forEach(r => mapa.set(`${r.vehicleId}_${r.weekDate}`, r));
+    nube.forEach(r => {
+      const key = `${r.vehicleId}_${r.weekDate}`;
+      const local = mapa.get(key);
+      if (!local || new Date(r.timestamp) >= new Date(local.timestamp)) {
+        mapa.set(key, r);
+      }
+    });
+    window.state.history = Array.from(mapa.values())
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    localStorage.setItem("vehicle_history", JSON.stringify(window.state.history));
+    if (modalAbierto("historial-admin-modal")) verHistorialAdmin();
+    if (modalAbierto("puntajes-admin-modal")) verPuntajesAdmin();
+  }
+}, err => console.error("historial:", err));
+
+async function guardarEnNube(record) {
+  if (!record || !record.vehicleId || !record.weekDate) return;
+  try {
+    const docId = `${record.vehicleId}_${record.weekDate}`;
+    await setDoc(doc(db, "historial", docId), record, { merge: true });
+  } catch (e) {
+    console.error("Error guardando historial en nube:", e);
+  }
+}
+
 onAuthStateChanged(auth, u => { usuarioAdmin = u; });
 
 // ---------- Documentos (operarios) ----------
@@ -544,5 +575,6 @@ Object.assign(window, {
   tapTitulo, abrirDocumentos, abrirArchivo, cerrarModal,
   entrarAdmin, salirAdmin, formUnidad, guardarUnidad, toggleBaja,
   cargarIniciales, cargarPrueba,
-  verInstructivoAdmin, verHistorialAdmin, verPuntajesAdmin
+  verInstructivoAdmin, verHistorialAdmin, verPuntajesAdmin,
+  guardarEnNube
 });
