@@ -250,10 +250,13 @@ function panelAdmin() {
 
   const acciones = `
     <div class="flex flex-wrap gap-2 mb-4">
-      <button onclick="formUnidad(null)" class="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg font-bold">+ Nueva unidad</button>
+      <button onclick="formUnidad(null)" class="px-3 py-2 text-xs bg-slate-800 text-white rounded-lg font-bold">+ Nueva unidad</button>
+      <button onclick="verHistorialAdmin()" class="px-3 py-2 text-xs bg-blue-700 text-white rounded-lg font-bold">📋 Historial por Unidad</button>
+      <button onclick="verPuntajesAdmin()" class="px-3 py-2 text-xs bg-amber-600 text-white rounded-lg font-bold">🏆 Puntaje Conductores</button>
+      <button onclick="verInstructivoAdmin()" class="px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold text-slate-700">ℹ️ Instructivo Carga</button>
       ${unidadesNube.length === 0
-        ? `<button onclick="cargarIniciales()" class="px-4 py-2 text-sm border border-slate-300 rounded-lg font-bold">Cargar unidades iniciales</button>`
-        : `<button onclick="cargarPrueba()" class="px-4 py-2 text-sm border border-slate-300 rounded-lg font-bold">Cargar documentos de prueba</button>`}
+        ? `<button onclick="cargarIniciales()" class="px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold">Cargar unidades iniciales</button>`
+        : `<button onclick="cargarPrueba()" class="px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold text-slate-500">Cargar prueba</button>`}
     </div>`;
 
   mostrarModal("admin-modal", `
@@ -399,10 +402,147 @@ async function cargarPrueba() {
   }
 }
 
+// ---------- funciones adicionales de administración ----------
+
+function verInstructivoAdmin() {
+  mostrarModal("instructivo-modal", `
+    <div class="flex justify-between items-center mb-3">
+      <h3 class="font-black text-lg text-slate-800">Guía de Carga de Documentos</h3>
+      <button onclick="cerrarModal('instructivo-modal'); panelAdmin();" class="text-slate-400 text-2xl px-2">&times;</button>
+    </div>
+    <div class="space-y-3 text-sm text-slate-700">
+      <div class="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+        <div class="font-bold text-blue-900 mb-1">1. Subir archivos a Google Drive</div>
+        <p class="text-xs text-blue-800">Arrastrar los PDF a la carpeta compartida <b>Flota Documentos</b> en Chrome.</p>
+      </div>
+      <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+        <div class="font-bold text-slate-900 mb-1">2. Nombre sugerido (Convención)</div>
+        <code class="block text-xs font-mono bg-white p-2 border rounded my-1 text-slate-800">PATENTE_TIPO_VENCIMIENTO.pdf</code>
+        <ul class="text-xs list-disc pl-4 space-y-1 mt-1 text-slate-600">
+          <li><b>Ejemplo:</b> <span class="font-mono text-slate-800">KEF062_SEGURO_2027-12-31.pdf</span></li>
+          <li><b>Tipos válidos:</b> SEGURO, VTV, CEDULA_VERDE, CREDENCIAL_YPF</li>
+          <li><b>Sin vencimiento:</b> Usar 9999-12-31</li>
+        </ul>
+      </div>
+      <div class="p-3 bg-green-50 border border-green-200 rounded-xl">
+        <div class="font-bold text-green-900 mb-1">3. Ejecutar el corrector en la PC</div>
+        <p class="text-xs text-green-800">Hacer doble clic en <b>CORRECTOR_DOCUMENTOS.bat</b> en el escritorio. Corrige nombres, asigna permisos y actualiza la app al instante.</p>
+      </div>
+    </div>
+    <div class="mt-4 text-right">
+      <button onclick="cerrarModal('instructivo-modal'); panelAdmin();" class="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg font-bold">Entendido</button>
+    </div>`);
+}
+
+function verHistorialAdmin(filtroVehiculoId = "") {
+  const historial = (window.state?.history || []);
+  const opcionesVeh = unidadesNube
+    .slice()
+    .sort(ordenarPorId)
+    .map(u => `<option value="${u.id}" ${filtroVehiculoId === u.id ? "selected" : ""}>${u.id} - ${u.patente} (${u.descripcion})</option>`)
+    .join("");
+
+  const filtrados = filtroVehiculoId
+    ? historial.filter(h => h.vehicleId === filtroVehiculoId)
+    : historial;
+
+  const filas = filtrados.length === 0
+    ? `<p class="text-xs text-slate-400 p-4 text-center">No hay registros cargados para esta selección.</p>`
+    : filtrados.map(h => {
+        const fecha = h.timestamp ? new Date(h.timestamp).toLocaleDateString("es-AR") : (h.weekDate || "—");
+        const fallas = (h.reportedItems || []).length;
+        return `
+          <div class="p-3 border border-slate-200 rounded-xl mb-2 text-xs">
+            <div class="flex justify-between items-center font-bold text-slate-800 mb-1">
+              <span>🚗 ${h.vehicleId} · ${h.driverName || "Conductor no especificado"}</span>
+              <span class="text-slate-500 font-normal">${fecha}</span>
+            </div>
+            <div class="text-slate-600 flex justify-between">
+              <span>Km: ${h.startMileage || "—"} · Tipo: ${h.type || "Semanal"}</span>
+              <span class="${fallas > 0 ? "text-amber-600 font-bold" : "text-green-600 font-bold"}">
+                ${fallas > 0 ? `⚠️ ${fallas} ítems observados` : "✅ Sin fallas"}
+              </span>
+            </div>
+            ${h.generalObservations ? `<div class="mt-1 bg-slate-50 p-1.5 rounded text-slate-700 italic">"${h.generalObservations}"</div>` : ""}
+          </div>`;
+      }).join("");
+
+  mostrarModal("historial-admin-modal", `
+    <div class="flex justify-between items-center mb-3">
+      <h3 class="font-black text-lg text-slate-800">Historial por Unidad</h3>
+      <button onclick="cerrarModal('historial-admin-modal'); panelAdmin();" class="text-slate-400 text-2xl px-2">&times;</button>
+    </div>
+    <div class="mb-3">
+      <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Filtrar por vehículo:</label>
+      <select onchange="verHistorialAdmin(this.value)" class="w-full border border-slate-300 p-2.5 rounded-xl text-xs font-medium bg-white">
+        <option value="">-- Todos los vehículos (${historial.length} registros) --</option>
+        ${opcionesVeh}
+      </select>
+    </div>
+    <div class="max-h-[60vh] overflow-y-auto">
+      ${filas}
+    </div>
+    <div class="mt-4 flex justify-between items-center">
+      <button onclick="cerrarModal('historial-admin-modal'); panelAdmin();" class="px-4 py-2 text-xs text-slate-600 font-bold">Volver al panel</button>
+    </div>`);
+}
+
+function verPuntajesAdmin() {
+  const historial = (window.state?.history || []);
+  const conduct = {};
+
+  historial.forEach(h => {
+    const dni = h.driverDni || "S/D";
+    const nombre = h.driverName || "Sin Nombre";
+    const key = `${dni}_${nombre}`;
+    if (!conduct[key]) {
+      conduct[key] = { dni, nombre, reportes: 0, puntos: 0, semanasLimpias: 0 };
+    }
+    conduct[key].reportes++;
+    conduct[key].puntos += (h.creditsAwarded || 0);
+    if (h.isCleanWeek) conduct[key].semanasLimpias++;
+  });
+
+  const lista = Object.values(conduct).sort((a, b) => b.puntos - a.puntos);
+
+  const filas = lista.length === 0
+    ? `<p class="text-xs text-slate-400 p-4 text-center">No hay registros de conductores en el historial.</p>`
+    : lista.map((c, i) => `
+        <div class="flex items-center justify-between p-3 border border-slate-200 rounded-xl mb-2 text-xs">
+          <div class="flex items-center gap-2.5">
+            <span class="w-6 h-6 rounded-full ${i === 0 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"} flex items-center justify-center font-bold">${i + 1}</span>
+            <div>
+              <div class="font-bold text-slate-800 text-sm">${c.nombre}</div>
+              <div class="text-slate-500 text-[11px]">DNI: ${c.dni} · ${c.reportes} inspecciones</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="text-sm font-black text-amber-600">${c.puntos} pts</div>
+            <div class="text-[10px] text-green-600 font-bold">⭐ ${c.semanasLimpias} sem. limpias</div>
+          </div>
+        </div>`).join("");
+
+  mostrarModal("puntajes-admin-modal", `
+    <div class="flex justify-between items-center mb-3">
+      <div>
+        <h3 class="font-black text-lg text-slate-800">Puntaje por Conductor</h3>
+        <p class="text-xs text-slate-500">Créditos acumulados según inspecciones realizadas</p>
+      </div>
+      <button onclick="cerrarModal('puntajes-admin-modal'); panelAdmin();" class="text-slate-400 text-2xl px-2">&times;</button>
+    </div>
+    <div class="max-h-[60vh] overflow-y-auto">
+      ${filas}
+    </div>
+    <div class="mt-4 flex justify-between items-center">
+      <button onclick="cerrarModal('puntajes-admin-modal'); panelAdmin();" class="px-4 py-2 text-xs text-slate-600 font-bold">Volver al panel</button>
+    </div>`);
+}
+
 // ---------- exposición a los onclick del HTML ----------
 
 Object.assign(window, {
   tapTitulo, abrirDocumentos, abrirArchivo, cerrarModal,
   entrarAdmin, salirAdmin, formUnidad, guardarUnidad, toggleBaja,
-  cargarIniciales, cargarPrueba
+  cargarIniciales, cargarPrueba,
+  verInstructivoAdmin, verHistorialAdmin, verPuntajesAdmin
 });
