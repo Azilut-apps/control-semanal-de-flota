@@ -69,14 +69,47 @@ const claveRegistro = r => window.claveRegistro(r);
 
 // Semáforo calculado en la app, no guardado.
 function semaforo(iso) {
-  if (!iso) return { color: "slate", txt: "Sin cargar" };
+  if (!iso) return { color: "slate", txt: "Sin cargar", dias: null };
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
   const [y, m, d] = iso.split("-").map(Number);
   const dias = Math.round((new Date(y, m - 1, d) - hoy) / 86400000);
-  if (dias < 0) return { color: "red", txt: "Vencido" };
-  if (dias <= 30) return { color: "amber", txt: `Vence en ${dias} días` };
-  return { color: "green", txt: "Vigente" };
+  if (dias < 0) return { color: "red", txt: "Vencido", dias };
+  if (dias <= 30) return { color: "amber", txt: `Vence en ${dias} días`, dias };
+  return { color: "green", txt: "Vigente", dias };
+}
+
+function resumenSemaforoUnidad(v) {
+  if (!v) return { color: "slate", texto: "" };
+  const pat = patenteDe(v);
+  const items = [
+    ...TIPOS_DOC.map(t => ({ label: t.label, s: semaforo(documentosCache[`${pat}_${t.id}`]?.vencimiento) })),
+    { label: "Matafuego", s: semaforo(v.extintorVencimiento) }
+  ];
+
+  const vencidos = items.filter(i => i.s.color === "red").map(i => i.label);
+  if (vencidos.length > 0) {
+    const texto = vencidos.length === 1
+      ? `${vencidos[0]} vencido`
+      : `${vencidos[0]} +${vencidos.length - 1} vencidos`;
+    return { color: "red", texto };
+  }
+
+  const porVencer = items
+    .filter(i => i.s.color === "amber")
+    .sort((a, b) => a.s.dias - b.s.dias);
+  if (porVencer.length > 0) {
+    const p = porVencer[0];
+    const texto = porVencer.length === 1
+      ? `${p.label} (${p.s.dias}d)`
+      : `${p.label} (${p.s.dias}d) +${porVencer.length - 1}`;
+    return { color: "amber", texto };
+  }
+
+  if (items.some(i => i.s.color === "green")) {
+    return { color: "green", texto: "" };
+  }
+  return { color: "slate", texto: "Sin docs" };
 }
 
 function cerrarModal(id) {
@@ -129,6 +162,7 @@ onSnapshot(collection(db, "documentos"), snap => {
   documentosCache = {};
   snap.docs.forEach(d => { documentosCache[d.id] = d.data(); });
   if (modalAbierto("docs-modal")) renderDocs();
+  if (window.state?.view === "list" && window.render) window.render();
 }, err => console.error("documentos:", err));
 
 onSnapshot(collection(db, "historial"), snap => {
@@ -213,9 +247,11 @@ async function crearAlta() {
 
 // ---------- Documentos (operarios) ----------
 
-function abrirDocumentos() {
-  if (!state.selectedVehicle) return;
-  docVehiculo = state.selectedVehicle;
+function abrirDocumentos(vehiculoId = null) {
+  docVehiculo = vehiculoId
+    ? vehicles.find(v => v.id === vehiculoId)
+    : state.selectedVehicle;
+  if (!docVehiculo) return;
   renderDocs();
 }
 
@@ -679,7 +715,7 @@ function verPuntajesAdmin() {
 // ---------- exposición a los onclick del HTML ----------
 
 Object.assign(window, {
-  tapTitulo, abrirDocumentos, abrirArchivo, cerrarModal,
+  tapTitulo, abrirDocumentos, abrirArchivo, cerrarModal, resumenSemaforoUnidad,
   entrarAdmin, salirAdmin, toggleVerPass, formUnidad, guardarUnidad, toggleBaja,
   cargarIniciales, cargarPrueba,
   verInstructivoAdmin, verHistorialAdmin, verPuntajesAdmin,
