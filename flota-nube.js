@@ -106,10 +106,15 @@ function resumenSemaforoUnidad(v) {
     return { color: "amber", texto };
   }
 
-  if (items.some(i => i.s.color === "green")) {
+  if (items.every(i => i.s.color === "green")) {
     return { color: "green", texto: "" };
   }
-  return { color: "slate", texto: "Sin docs" };
+
+  const faltantes = items.filter(i => i.s.color === "slate").map(i => i.label);
+  const textoFalta = faltantes.length === 1
+    ? `Falta ${faltantes[0]}`
+    : (faltantes.length === items.length ? "Sin docs" : `Faltan ${faltantes.length} docs`);
+  return { color: "slate", texto: textoFalta };
 }
 
 function cerrarModal(id) {
