@@ -1,6 +1,7 @@
 // flota-nube.js
 // Capa nube con Firestore y Authentication.
 // Operarios: solo lectura, sin login. Altas ("Recordar mis datos") en colección "altas".
+// Historial: cada registro se enlaza a su alta (altaId) y a su semana (semanaInicio).
 // Administradores: alta, edición y baja lógica de unidades. Acceso oculto (5 toques en el título).
 // Integrado en index.html (módulo cargado al final del body).
 
@@ -62,6 +63,9 @@ function fmtFecha(iso) {
   const [y, m, d] = iso.split("-");
   return `${d}-${m}-${y}`;
 }
+
+// Fuente única en index.html (window.claveRegistro). Alias local para no duplicar la lógica.
+const claveRegistro = r => window.claveRegistro(r);
 
 // Semáforo calculado en la app, no guardado.
 function semaforo(iso) {
@@ -130,11 +134,11 @@ onSnapshot(collection(db, "documentos"), snap => {
 onSnapshot(collection(db, "historial"), snap => {
   const nube = snap.docs.map(d => d.data());
   if (nube.length > 0 && window.state) {
-    // Fusionar historial nube con local sin duplicar (clave: vehicleId + weekDate)
+    // Fusionar historial nube con local sin duplicar (clave: alta + semana, o unidad + fecha)
     const mapa = new Map();
-    (window.state.history || []).forEach(r => mapa.set(`${r.vehicleId}_${r.weekDate}`, r));
+    (window.state.history || []).forEach(r => mapa.set(claveRegistro(r), r));
     nube.forEach(r => {
-      const key = `${r.vehicleId}_${r.weekDate}`;
+      const key = claveRegistro(r);
       const local = mapa.get(key);
       if (!local || new Date(r.timestamp) >= new Date(local.timestamp)) {
         mapa.set(key, r);
@@ -151,8 +155,7 @@ onSnapshot(collection(db, "historial"), snap => {
 async function guardarEnNube(record) {
   if (!record || !record.vehicleId || !record.weekDate) return;
   try {
-    const docId = `${record.vehicleId}_${record.weekDate}`;
-    await setDoc(doc(db, "historial", docId), record, { merge: true });
+    await setDoc(doc(db, "historial", claveRegistro(record)), record, { merge: true });
   } catch (e) {
     console.error("Error guardando historial en nube:", e);
   }
@@ -164,26 +167,20 @@ onAuthStateChanged(auth, u => { usuarioAdmin = u; });
 
 const VENTANA_CONFLICTO_MS = 5 * 60 * 1000;
 
-// Lunes de la semana de una fecha AAAA-MM-DD, en formato AAAA-MM-DD.
-function lunesDe(iso) {
-  const [y, m, d] = iso.split("-").map(Number);
-  const f = new Date(y, m - 1, d);
-  f.setDate(f.getDate() - ((f.getDay() + 6) % 7));
-  const p = n => String(n).padStart(2, "0");
-  return `${f.getFullYear()}-${p(f.getMonth() + 1)}-${p(f.getDate())}`;
-}
+// Fuente única en index.html (window.lunesDe).
+const lunesDe = iso => window.lunesDe(iso);
 
-// Crea un alta nueva. Devuelve true si se creó, false si no.
+// Crea un alta nueva. Devuelve el ID del alta, o null si no se creó.
 // Control de conflicto solo en el cliente: orienta al operario, no es seguridad.
 async function crearAlta() {
   const s = window.state;
   const v = s.selectedVehicle;
   const f = s.formData;
-  if (!v) return false;
+  if (!v) return null;
 
   if (!f.driverName || !f.driverDni || !f.startMileage || !f.weekDate) {
     alert("Completá conductor, DNI, km y fecha antes de recordar datos.");
-    return false;
+    return null;
   }
 
   try {
@@ -195,10 +192,10 @@ async function crearAlta() {
     });
     if (conflicto) {
       alert(`Verificar: ${v.id} fue registrada hace instantes por otro conductor (DNI ${conflicto.dni}).`);
-      return false;
+      return null;
     }
 
-    await addDoc(collection(db, "altas"), {
+    const ref = await addDoc(collection(db, "altas"), {
       unidadId: v.id,
       fecha: f.weekDate,
       semanaInicio: lunesDe(f.weekDate),
@@ -207,10 +204,10 @@ async function crearAlta() {
       km: Number(f.startMileage),
       creado: serverTimestamp()
     });
-    return true;
+    return ref.id;
   } catch (e) {
     alert("No se pudo registrar el alta: " + e.message);
-    return false;
+    return null;
   }
 }
 
