@@ -270,6 +270,39 @@
         state.formData = initFormData();
         window.state = state;
 
+        function lunesDe(iso) {
+            if (!iso) return '';
+            const [y, m, d] = iso.split('-').map(Number);
+            const dt = new Date(y, m - 1, d);
+            const day = dt.getDay();
+            const diff = day === 0 ? -6 : 1 - day;
+            dt.setDate(dt.getDate() + diff);
+            return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+        }
+        window.lunesDe = lunesDe;
+
+        function claveRegistro(r) {
+            if (!r) return '';
+            const sem = r.semanaInicio || (r.weekDate ? lunesDe(r.weekDate) : '');
+            if (r.altaId && sem) return `${r.altaId}_${sem}`;
+            return `${r.vehicleId}_${r.weekDate}`;
+        }
+        window.claveRegistro = claveRegistro;
+
+        function getAltaVigente(vehicleId) {
+            if (!vehicleId) return null;
+            const altas = JSON.parse(localStorage.getItem('altas_por_unidad') || '{}');
+            return altas[vehicleId] || null;
+        }
+
+        function setAltaVigente(vehicleId, altaId) {
+            if (!vehicleId) return;
+            const altas = JSON.parse(localStorage.getItem('altas_por_unidad') || '{}');
+            if (altaId) altas[vehicleId] = altaId;
+            else delete altas[vehicleId];
+            localStorage.setItem('altas_por_unidad', JSON.stringify(altas));
+        }
+
         // --- INIT ---
         function init() {
             loadHistory();
@@ -402,26 +435,39 @@
             renderList();
         }
 
+        function buscarRegistroSemana(vehicleId, weekDate) {
+            const sem = lunesDe(weekDate);
+            const altaId = getAltaVigente(vehicleId);
+            return state.history
+                .filter(r => {
+                    if (r.vehicleId !== vehicleId) return false;
+                    if (altaId && r.altaId === altaId) {
+                        return (r.semanaInicio || lunesDe(r.weekDate)) === sem;
+                    }
+                    return r.weekDate === weekDate;
+                })
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+        }
+
         function selectVehicle(id, targetDate = null) {
             state.selectedVehicle = vehicles.find(v => v.id === id);
             state.view = 'form';
 
             // Cargar datos por defecto
             state.formData = initFormData();
-        window.state = state;
+            window.state = state;
             if (targetDate) state.formData.weekDate = targetDate;
 
-            // Cargar kilometraje recordado
+            // Cargar kilometraje recordado para la unidad y semana
+            const weekToSearch = targetDate || state.formData.weekDate;
             const mileages = JSON.parse(localStorage.getItem('vehicle_mileages') || '{}');
-            if (mileages[id]) {
-                state.formData.startMileage = mileages[id];
+            const kmSemana = mileages[`${id}_${lunesDe(weekToSearch)}`];
+            if (kmSemana) {
+                state.formData.startMileage = kmSemana;
             }
 
             // Buscar registro existente para esta semana
-            const weekToSearch = targetDate || state.formData.weekDate;
-            const saved = state.history
-                .filter(r => r.vehicleId === id && r.weekDate === weekToSearch)
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+            const saved = buscarRegistroSemana(id, weekToSearch);
 
             if (saved) {
                 state.formData = {
@@ -466,14 +512,12 @@
 
             if (field === 'startMileage' && state.selectedVehicle) {
                 const mileages = JSON.parse(localStorage.getItem('vehicle_mileages') || '{}');
-                mileages[state.selectedVehicle.id] = value;
+                mileages[`${state.selectedVehicle.id}_${lunesDe(state.formData.weekDate)}`] = value;
                 localStorage.setItem('vehicle_mileages', JSON.stringify(mileages));
             }
 
             if (field === 'weekDate') {
-                const saved = state.history
-                .filter(r => r.vehicleId === state.selectedVehicle.id && r.weekDate === value)
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+                const saved = buscarRegistroSemana(state.selectedVehicle.id, value);
 
                 if (saved) {
                     state.formData = {
@@ -488,13 +532,14 @@
                 } else {
                     const currentName = state.formData.driverName;
                     const currentDni = state.formData.driverDni;
-                    const currentKm = state.formData.startMileage;
+                    const mileages = JSON.parse(localStorage.getItem('vehicle_mileages') || '{}');
+                    const kmSemana = mileages[`${state.selectedVehicle.id}_${lunesDe(value)}`] || '';
                     state.formData = initFormData();
-        window.state = state;
+                    window.state = state;
                     state.formData.weekDate = value;
                     state.formData.driverName = currentName;
                     state.formData.driverDni = currentDni;
-                    state.formData.startMileage = currentKm;
+                    state.formData.startMileage = kmSemana;
                 }
             }
             autoSaveRecord('Auto');
@@ -505,9 +550,12 @@
         // Si el alta falla o hay conflicto, el checkbox no se tilda.
         async function toggleFixUser() {
             const activar = !state.shouldFixUser;
-            if (activar && window.crearAlta) {
-                const ok = await window.crearAlta();
-                if (!ok) { render(); return; }
+            if (activar && window.crearAlta && state.selectedVehicle) {
+                const altaId = await window.crearAlta();
+                if (!altaId) { render(); return; }
+                setAltaVigente(state.selectedVehicle.id, altaId);
+            } else if (!activar && state.selectedVehicle) {
+                setAltaVigente(state.selectedVehicle.id, null);
             }
             state.shouldFixUser = activar;
             localStorage.setItem('should_fix_user', state.shouldFixUser);
@@ -592,15 +640,15 @@
             return state.formData.driverName && state.formData.driverDni && state.formData.startMileage && state.formData.weekDate;
         }
 
-        function autoSaveRecord(type = 'Automático') {
-            if (!state.selectedVehicle || !isFormValid()) return false;
+        function buildRecord(type) {
             const vehicle = state.selectedVehicle;
             const result = calculatePoints(state.formData.checks, state.formData.dailyChecks, state.formData.isCleanWeek);
-
-            const record = {
+            return {
                 id: Date.now().toString(),
                 timestamp: new Date().toISOString(),
                 vehicleId: vehicle.id,
+                altaId: getAltaVigente(vehicle.id),
+                semanaInicio: lunesDe(state.formData.weekDate),
                 driverName: state.formData.driverName,
                 driverDni: state.formData.driverDni,
                 startMileage: state.formData.startMileage,
@@ -616,8 +664,11 @@
                     .filter(i => state.formData.checks[i.id])
                     .map(i => ({ label: i.label, sub: i.sub, status: state.formData.checks[i.id], id: i.id }))
             };
+        }
 
-            const existingIdx = state.history.findIndex(h => h.vehicleId === vehicle.id && h.weekDate === state.formData.weekDate);
+        function upsertHistoryRecord(record) {
+            const key = claveRegistro(record);
+            const existingIdx = state.history.findIndex(h => claveRegistro(h) === key);
             if (existingIdx !== -1) {
                 state.history[existingIdx] = record;
             } else {
@@ -625,6 +676,11 @@
             }
             localStorage.setItem('vehicle_history', JSON.stringify(state.history));
             if (window.guardarEnNube) window.guardarEnNube(record);
+        }
+
+        function autoSaveRecord(type = 'Automático') {
+            if (!state.selectedVehicle || !isFormValid()) return false;
+            upsertHistoryRecord(buildRecord(type));
             return true;
         }
 
@@ -742,41 +798,7 @@
         }
 
         function saveRecord(type) {
-            const vehicle = state.selectedVehicle;
-
-            // Siempre se calculan créditos (proactivo)
-            const result = calculatePoints(state.formData.checks, state.formData.dailyChecks, state.formData.isCleanWeek);
-
-            const record = {
-                id: Date.now().toString(),
-                timestamp: new Date().toISOString(),
-                vehicleId: vehicle.id,
-                driverName: state.formData.driverName,
-                driverDni: state.formData.driverDni,
-                startMileage: state.formData.startMileage,
-                weekDate: state.formData.weekDate,
-                type: type,
-                creditsAwarded: result.pts,
-                creditReasons: result.messages,
-                isCleanWeek: state.formData.isCleanWeek,
-                dailyChecks: JSON.parse(JSON.stringify(state.formData.dailyChecks)),
-                checkStatus: JSON.parse(JSON.stringify(state.formData.checks)),
-                generalObservations: state.formData.observations,
-                reportedItems: [...genericItems, ...specificItems]
-                    .filter(i => state.formData.checks[i.id])
-                    .map(i => ({ label: i.label, sub: i.sub, status: state.formData.checks[i.id], id: i.id }))
-            };
-
-            // Evitar duplicados en la misma semana/vehículo: si ya existe, reemplazar.
-            const existingIdx = state.history.findIndex(h => h.vehicleId === vehicle.id && h.weekDate === state.formData.weekDate);
-            if (existingIdx !== -1) {
-                state.history[existingIdx] = record;
-            } else {
-                state.history.unshift(record);
-            }
-
-            localStorage.setItem('vehicle_history', JSON.stringify(state.history));
-            if (window.guardarEnNube) window.guardarEnNube(record);
+            upsertHistoryRecord(buildRecord(type));
             if (type === 'Parcial') {
                 const saveBtn = document.querySelector('button[onclick*="saveRecord(\'Parcial\')"]');
                 if (saveBtn) {
