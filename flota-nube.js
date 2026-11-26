@@ -400,7 +400,13 @@ function panelAdmin() {
       <button onclick="formUnidad(null)" class="px-3 py-2 text-xs bg-slate-800 text-white rounded-lg font-bold">+ Nueva unidad</button>
       <button onclick="verHistorialAdmin()" class="px-3 py-2 text-xs bg-blue-700 text-white rounded-lg font-bold">📋 Historial por Unidad</button>
       <button onclick="verPuntajesAdmin()" class="px-3 py-2 text-xs bg-amber-600 text-white rounded-lg font-bold">🏆 Puntaje Conductores</button>
+      <button onclick="verInformeAdmin()" class="px-3 py-2 text-xs bg-green-700 text-white rounded-lg font-bold">📊 Informe Mensual</button>
       <button onclick="verInstructivoAdmin()" class="px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold text-slate-700">ℹ️ Instructivo Carga</button>
+      <button onclick="exportarRespaldoAdmin()" class="px-3 py-2 text-xs bg-slate-700 text-white rounded-lg font-bold">💾 Exportar respaldo</button>
+      <label class="px-3 py-2 text-xs bg-slate-200 text-slate-800 rounded-lg font-bold cursor-pointer hover:bg-slate-300">
+        📂 Restaurar datos
+        <input type="file" class="hidden" accept=".json" onchange="restaurarRespaldoAdmin(this)">
+      </label>
       ${unidadesNube.length === 0
         ? `<button onclick="cargarIniciales()" class="px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold">Cargar unidades iniciales</button>`
         : `<button onclick="cargarPrueba()" class="px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold text-slate-500">Cargar prueba</button>`}
@@ -717,6 +723,258 @@ function verPuntajesAdmin() {
     </div>`);
 }
 
+// ---------- informe mensual admin ----------
+
+function verInformeAdmin() {
+  const historial = (window.state?.history || []);
+  const ahora = new Date();
+  const mesDefault = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}`;
+
+  const unidades = unidadesNube.slice().sort(ordenarPorId);
+  const conductoresMap = new Map();
+  historial.forEach(h => {
+    const dni = String(h.driverDni || "").trim();
+    if (!dni) return;
+    if (!conductoresMap.has(dni)) {
+      conductoresMap.set(dni, h.driverName || "Sin nombre");
+    }
+  });
+  const conductores = Array.from(conductoresMap.entries()).sort((a, b) => a[1].localeCompare(b[1], "es"));
+
+  const checksUnidades = unidades.map(u => `
+    <label class="flex items-center gap-1.5 text-xs p-1 hover:bg-slate-50 rounded cursor-pointer">
+      <input type="checkbox" class="inf-unidad" value="${u.id}" onchange="syncCheckTodos('inf-unidad', 'inf-unidades-todas')">
+      <span class="font-bold text-slate-700">${u.id}</span>
+      <span class="text-slate-500 truncate">${u.patente || ""}</span>
+    </label>`).join("");
+
+  const checksConductores = conductores.length === 0
+    ? `<p class="text-xs text-slate-400 p-1">Sin conductores registrados.</p>`
+    : conductores.map(([dni, nombre]) => `
+      <label class="flex items-center gap-1.5 text-xs p-1 hover:bg-slate-50 rounded cursor-pointer">
+        <input type="checkbox" class="inf-conductor" value="${dni}" onchange="syncCheckTodos('inf-conductor', 'inf-conductores-todos')">
+        <span class="font-bold text-slate-700 truncate">${nombre}</span>
+        <span class="text-slate-400">(${dni})</span>
+      </label>`).join("");
+
+  mostrarModal("informe-admin-modal", `
+    <div class="flex justify-between items-center mb-3">
+      <h3 class="font-black text-lg text-slate-800">📊 Informe Mensual (Admin)</h3>
+      <button onclick="cerrarModal('informe-admin-modal'); panelAdmin();" class="text-slate-400 text-2xl px-2">&times;</button>
+    </div>
+    <div class="space-y-3 text-xs">
+      <div>
+        <label class="block font-bold text-slate-500 uppercase mb-1">Período (Mes / Año)</label>
+        <input id="inf-mes" type="month" value="${mesDefault}" class="w-full border border-slate-300 p-2 rounded-xl text-xs bg-white">
+      </div>
+      <div class="border border-slate-200 rounded-xl p-2.5">
+        <label class="flex items-center gap-2 font-bold text-slate-800 pb-1.5 mb-1.5 border-b border-slate-100 cursor-pointer">
+          <input id="inf-unidades-todas" type="checkbox" checked onchange="toggleCheckGrupo('inf-unidad', this.checked)">
+          <span>Todas las unidades (${unidades.length})</span>
+        </label>
+        <div class="max-h-32 overflow-y-auto grid grid-cols-2 gap-1">${checksUnidades}</div>
+      </div>
+      <div class="border border-slate-200 rounded-xl p-2.5">
+        <label class="flex items-center gap-2 font-bold text-slate-800 pb-1.5 mb-1.5 border-b border-slate-100 cursor-pointer">
+          <input id="inf-conductores-todos" type="checkbox" checked onchange="toggleCheckGrupo('inf-conductor', this.checked)">
+          <span>Todos los conductores (${conductores.length})</span>
+        </label>
+        <div class="max-h-32 overflow-y-auto space-y-0.5">${checksConductores}</div>
+      </div>
+    </div>
+    <div class="mt-4 flex justify-between items-center">
+      <button onclick="cerrarModal('informe-admin-modal'); panelAdmin();" class="px-4 py-2 text-xs text-slate-600 font-bold">Volver</button>
+      <button onclick="descargarInformeAdmin()" class="px-4 py-2 text-xs bg-green-700 text-white rounded-lg font-bold hover:bg-green-800">📥 Descargar Excel</button>
+    </div>`);
+}
+
+function toggleCheckGrupo(clase, checked) {
+  if (checked) {
+    document.querySelectorAll(`.${clase}`).forEach(cb => { cb.checked = false; });
+  }
+}
+
+function syncCheckTodos(clase, idTodos) {
+  const todosCb = document.getElementById(idTodos);
+  if (!todosCb) return;
+  const algunoMarcado = Array.from(document.querySelectorAll(`.${clase}`)).some(cb => cb.checked);
+  todosCb.checked = !algunoMarcado;
+}
+
+function descargarInformeAdmin() {
+  const mesVal = document.getElementById("inf-mes")?.value;
+  if (!mesVal) return alert("Seleccioná un mes.");
+  const [anioStr, mesStr] = mesVal.split("-");
+  const anio = Number(anioStr);
+  const mesIdx = Number(mesStr) - 1;
+
+  const todasUnidades = document.getElementById("inf-unidades-todas")?.checked;
+  const selUnidades = Array.from(document.querySelectorAll(".inf-unidad:checked")).map(cb => cb.value);
+  if (!todasUnidades && selUnidades.length === 0) return alert("Seleccioná al menos una unidad o 'Todas'.");
+
+  const todosConductores = document.getElementById("inf-conductores-todos")?.checked;
+  const selConductores = Array.from(document.querySelectorAll(".inf-conductor:checked")).map(cb => cb.value);
+  if (!todosConductores && selConductores.length === 0) return alert("Seleccioná al menos un conductor o 'Todos'.");
+
+  const historial = (window.state?.history || []);
+  const filtrados = historial.filter(r => {
+    const d = new Date(r.timestamp);
+    if (d.getFullYear() !== anio || d.getMonth() !== mesIdx) return false;
+    if (!todasUnidades && !selUnidades.includes(r.vehicleId)) return false;
+    if (!todosConductores && !selConductores.includes(String(r.driverDni || "").trim())) return false;
+    return true;
+  });
+
+  if (filtrados.length === 0) return alert("No hay registros para los filtros seleccionados.");
+
+  const totalCreditos = filtrados.reduce((acc, r) => acc + (r.creditsAwarded || 0), 0);
+  const summaryData = [
+    ["INFORME MENSUAL ADMINISTRADOR - AZILUT S.A."],
+    ["PERIODO", `${mesStr}/${anioStr}`],
+    ["UNIDADES", todasUnidades ? "Todas" : selUnidades.join(", ")],
+    ["CONDUCTORES", todosConductores ? "Todos" : selConductores.join(", ")],
+    ["TOTAL REPORTES", filtrados.length],
+    ["CRÉDITOS ACUMULADOS", totalCreditos],
+    ["FECHA GENERACIÓN", new Date().toLocaleDateString("es-AR")],
+    [""]
+  ];
+
+  const header = ["FECHA", "VEHÍCULO", "CONDUCTOR", "DNI", "TIPO", "KM", "LUN (A/W)", "MAR (A/W)", "MIE (A/W)", "JUE (A/W)", "VIE (A/W)", "FALLAS", "CRÉDITOS", "OBSERVACIONES"];
+  const rows = filtrados.map(r => {
+    const d = r.dailyChecks || {};
+    const fmtDay = day => {
+      if (!d[day]) return "-";
+      const oil = d[day].oil === "BUENO" ? "B" : (d[day].oil === "MALO" ? "M" : "-");
+      const water = d[day].water === "BUENO" ? "B" : (d[day].water === "MALO" ? "M" : "-");
+      return `${oil}/${water}`;
+    };
+    const fallasDiarias = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+      .reduce((n, k) => n + (d[k]?.oil === "MALO" ? 1 : 0) + (d[k]?.water === "MALO" ? 1 : 0), 0);
+    const totalFallas = (r.reportedItems?.length || 0) + fallasDiarias;
+
+    return [
+      new Date(r.timestamp).toLocaleDateString("es-AR"),
+      r.vehicleId || "",
+      r.driverName || "",
+      r.driverDni || "",
+      r.type || "",
+      r.startMileage || "",
+      fmtDay("monday"),
+      fmtDay("tuesday"),
+      fmtDay("wednesday"),
+      fmtDay("thursday"),
+      fmtDay("friday"),
+      totalFallas,
+      r.creditsAwarded || 0,
+      r.generalObservations || ""
+    ];
+  });
+
+  const allRows = [...summaryData, header, ...rows];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(allRows);
+  if (window.applyAutoWidths) window.applyAutoWidths(ws, allRows);
+  XLSX.utils.book_append_sheet(wb, ws, "Informe Admin");
+  XLSX.writeFile(wb, `Informe_Admin_${anioStr}_${mesStr}.xlsx`);
+}
+
+// ---------- respaldo y restauración en Firestore (solo admin) ----------
+
+async function exportarRespaldoAdmin() {
+  try {
+    const altasSnap = await getDocs(collection(db, "altas"));
+    const altas = {};
+    altasSnap.docs.forEach(d => { altas[d.id] = d.data(); });
+
+    const vehiculos = {};
+    unidadesNube.forEach(u => {
+      const { id, ...rest } = u;
+      vehiculos[id] = rest;
+    });
+
+    const payload = {
+      version: 2,
+      fecha: new Date().toISOString(),
+      vehiculos,
+      documentos: documentosCache,
+      historial: window.state?.history || [],
+      altas
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `RESPALDO_FLOTA_AZILUT_${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    console.error(e);
+    alert("Error al exportar respaldo: " + e.message);
+  }
+}
+
+async function escribirEnLotes(operaciones) {
+  const TAM_LOTE = 450;
+  for (let i = 0; i < operaciones.length; i += TAM_LOTE) {
+    const batch = writeBatch(db);
+    operaciones.slice(i, i + TAM_LOTE).forEach(({ col, id, data }) => {
+      batch.set(doc(db, col, id), data, { merge: true });
+    });
+    await batch.commit();
+  }
+}
+
+function restaurarRespaldoAdmin(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const ops = [];
+      let resumen = "";
+
+      if (Array.isArray(data)) {
+        data.forEach(r => {
+          if (r?.vehicleId && r?.weekDate) {
+            ops.push({ col: "historial", id: claveRegistro(r), data: r });
+          }
+        });
+        resumen = `${ops.length} registros de historial (formato anterior)`;
+      } else if (data && typeof data === "object") {
+        const vehs = data.vehiculos || {};
+        const docs = data.documentos || {};
+        const hist = Array.isArray(data.historial) ? data.historial : [];
+        const alts = data.altas || {};
+
+        Object.entries(vehs).forEach(([id, val]) => ops.push({ col: "vehiculos", id, data: val }));
+        Object.entries(docs).forEach(([id, val]) => ops.push({ col: "documentos", id, data: val }));
+        hist.forEach(r => {
+          if (r?.vehicleId && r?.weekDate) ops.push({ col: "historial", id: claveRegistro(r), data: r });
+        });
+        Object.entries(alts).forEach(([id, val]) => ops.push({ col: "altas", id, data: val }));
+
+        resumen = `${Object.keys(vehs).length} vehículos, ${Object.keys(docs).length} documentos, ${hist.length} registros de historial, ${Object.keys(alts).length} altas`;
+      } else {
+        return alert("Formato de archivo no válido.");
+      }
+
+      if (ops.length === 0) return alert("El archivo no contiene datos para restaurar.");
+      if (!confirm(`Se restaurarán en la nube:\n${resumen}\n\n¿Continuar?`)) return;
+
+      await escribirEnLotes(ops);
+      alert(`Restauración completada (${ops.length} documentos actualizados en Firebase).`);
+      panelAdmin();
+    } catch (err) {
+      console.error(err);
+      alert("Error al restaurar respaldo: " + err.message);
+    } finally {
+      input.value = "";
+    }
+  };
+  reader.readAsText(file);
+}
+
 // ---------- exposición a los onclick del HTML ----------
 
 Object.assign(window, {
@@ -724,5 +982,7 @@ Object.assign(window, {
   entrarAdmin, salirAdmin, toggleVerPass, formUnidad, guardarUnidad, toggleBaja,
   cargarIniciales, cargarPrueba,
   verInstructivoAdmin, verHistorialAdmin, verPuntajesAdmin,
+  verInformeAdmin, toggleCheckGrupo, syncCheckTodos, descargarInformeAdmin,
+  exportarRespaldoAdmin, restaurarRespaldoAdmin,
   guardarEnNube, crearAlta
 });

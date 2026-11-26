@@ -936,8 +936,11 @@
         }
 
         function exportMonthlyReport() {
-            const dni = state.formData.driverDni || state.fixedDni;
-            if (!dni) return alert("Debe ingresar su DNI para generar el reporte mensual.");
+            let dni = state.formData.driverDni || state.fixedDni;
+            if (!dni) {
+                dni = (prompt("Ingresá tu DNI para descargar tu informe mensual:") || "").trim();
+            }
+            if (!dni) return;
 
             const now = new Date();
             const currentMonth = now.getMonth();
@@ -1139,32 +1142,8 @@
             await generateTicketPDF(h, "REGISTRO HISTÓRICO");
         }
 
-        function backupData() {
-            const blob = new Blob([JSON.stringify(state.history)], {type: 'application/json'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `BACKUP_AZILUT_${new Date().toISOString().split('T')[0]}.json`;
-            a.click();
-        }
-
-        function restoreData(input) {
-            if (!input.files[0]) return;
-            const reader = new FileReader();
-            reader.onload = e => {
-                try {
-                    const data = JSON.parse(e.target.result);
-                    if(Array.isArray(data)) {
-                        state.history = data;
-                        localStorage.setItem('vehicle_history', JSON.stringify(data));
-                        alert('Restaurado ' + data.length + ' registros.');
-                        render();
-                    }
-                } catch(err) { alert('Error archivo invalido'); }
-            };
-            reader.readAsText(input.files[0]);
-        }
-
         // --- RENDERERS ---
+        window.applyAutoWidths = applyAutoWidths;
 
         function render() {
             const app = document.getElementById('app');
@@ -1228,14 +1207,9 @@
                 <div class="max-w-6xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-4">
                     <div class="text-xs text-slate-400 font-bold uppercase tracking-widest">Azilut S.A. &copy; 2025 - Registros: ${state.history.length}</div>
                     <div class="flex flex-wrap justify-center gap-2">
-                        <button onclick="exportMonthlyReport()" class="bg-green-700 text-white text-xs px-4 py-2 rounded font-bold shadow-sm hover:bg-green-800 transition-colors flex items-center gap-2">
-                            📊 DESCARGAR INFORME MENSUAL
+                        <button onclick="exportMonthlyReport()" class="bg-green-700 text-white text-xs px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-green-800 transition-colors flex items-center gap-2">
+                            📊 DESCARGAR MI INFORME MENSUAL
                         </button>
-                        <button onclick="backupData()" class="bg-slate-700 text-white text-xs px-3 py-2 rounded">💾 Respaldar Datos</button>
-                        <label class="bg-slate-200 text-slate-700 text-xs px-3 py-2 rounded cursor-pointer">
-                            📂 Restaurar
-                            <input type="file" class="hidden" onchange="restoreData(this)" accept=".json">
-                        </label>
                     </div>
                 </div>
             </footer>`;
