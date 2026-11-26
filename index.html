@@ -12,6 +12,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Azilut Flota">
     <link rel="apple-touch-icon" href="icon-192.png">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Control Semanal de Flota - AZILUT S.A.">
+    <meta property="og:description" content="Planilla FO 57 de control diario y semanal de vehículos AZILUT S.A.">
+    <meta property="og:url" content="https://azilut-apps.github.io/control-semanal-de-flota/">
+    <meta property="og:image" content="https://azilut-apps.github.io/control-semanal-de-flota/icon-512.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -132,7 +137,61 @@
     <div id="app" class="pb-12"></div>
 
     <script>
-        // --- SERVICE WORKER REGISTRATION ---
+        // --- SERVICE WORKER REGISTRATION & PWA INSTALL ---
+        let deferredInstallPrompt = null;
+
+        function isAppInstalled() {
+            return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        }
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+            if (typeof render === 'function' && state?.view === 'list') render();
+        });
+
+        window.addEventListener('appinstalled', () => {
+            deferredInstallPrompt = null;
+            if (typeof render === 'function' && state?.view === 'list') render();
+        });
+
+        async function instalarApp() {
+            if (deferredInstallPrompt) {
+                deferredInstallPrompt.prompt();
+                await deferredInstallPrompt.userChoice;
+                deferredInstallPrompt = null;
+                render();
+                return;
+            }
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50';
+            modal.innerHTML = `
+                <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl text-slate-800">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-black text-base text-red-700">📲 Instalar App en este dispositivo</h3>
+                        <button onclick="this.closest('.fixed').remove()" class="text-slate-400 text-2xl leading-none px-1">&times;</button>
+                    </div>
+                    <div class="space-y-2.5 text-xs text-slate-700">
+                        <div class="p-2.5 bg-green-50 border border-green-200 rounded-xl">
+                            <div class="font-bold text-green-900 mb-0.5">Si abriste desde WhatsApp (Android):</div>
+                            <p>Tocá los <b>3 puntos (⋮)</b> arriba a la derecha &rarr; <b>Abrir en Chrome</b> &rarr; luego tocá <b>Instalar App</b> o <b>Agregar a la pantalla principal</b>.</p>
+                        </div>
+                        <div class="p-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+                            <div class="font-bold text-blue-900 mb-0.5">En iPhone / iPad (Safari):</div>
+                            <p>Tocá el botón <b>Compartir (□↑)</b> &rarr; <b>Agregar a inicio</b>.</p>
+                        </div>
+                        <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                            <div class="font-bold text-slate-900 mb-0.5">En PC (Chrome / Edge):</div>
+                            <p>Hacé clic en el ícono de instalar en la barra de direcciones (arriba a la derecha) o en menú <b>(⋮) &rarr; Instalar Control Flota AZILUT</b>.</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-right">
+                        <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 text-xs bg-slate-800 text-white rounded-lg font-bold">Entendido</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
@@ -1149,7 +1208,12 @@
                             </div>
                         ` : ''}
                     </div>
-                    <div>
+                    <div class="flex items-center gap-2">
+                        ${!isAppInstalled() ? `
+                            <button onclick="instalarApp()" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-700 text-white hover:bg-red-800 shadow-sm transition-colors">
+                                📲 Instalar App
+                            </button>
+                        ` : ''}
                         <button onclick="toggleLayout()" class="pc-toggle-btn ${state.layoutMode === 'pc' ? 'active' : ''}">
                             ${state.layoutMode === 'pc' ? '💻 MODO PC' : '📱 MODO MÓVIL'}
                         </button>
