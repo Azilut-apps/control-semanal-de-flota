@@ -519,42 +519,6 @@ async function cargarIniciales() {
   }
 }
 
-// Datos de prueba: fechas ficticias para probar semáforo y botón Ver PDF (sin archivo).
-async function cargarPrueba() {
-  if (!usuarioAdmin) {
-    alert("Debés iniciar sesión como administrador.");
-    return;
-  }
-  const unidadesActivas = unidadesNube.filter(u => u.activo !== false);
-  if (unidadesActivas.length === 0) {
-    alert("No hay unidades registradas en la base. Hacé clic primero en 'Cargar unidades iniciales'.");
-    return;
-  }
-  try {
-    const fechas = ["2026-12-15", "2027-06-30", "2026-11-10", "2027-02-28"];
-    const batch = writeBatch(db);
-    unidadesActivas.forEach(u => {
-      const pat = u.patente.replace(/\s+/g, "").toUpperCase();
-      TIPOS_DOC.forEach((t, i) => {
-        batch.set(doc(db, "documentos", `${pat}_${t.id}`), {
-          patente: pat,
-          vehiculoId: u.id,
-          tipo: t.id,
-          vencimiento: fechas[i],
-          archivoNombre: "",
-          archivoUrl: "",
-          actualizado: new Date().toISOString()
-        }, { merge: true });
-      });
-    });
-    await batch.commit();
-    alert("¡Documentos de prueba cargados con éxito! Ya podés revisar el botón Documentos.");
-  } catch (e) {
-    console.error(e);
-    alert("Error al cargar documentos de prueba: " + e.message);
-  }
-}
-
 // ---------- funciones adicionales de administración ----------
 
 function verInstructivoAdmin() {
@@ -980,7 +944,7 @@ function restaurarRespaldoAdmin(input) {
 Object.assign(window, {
   tapTitulo, abrirDocumentos, abrirArchivo, cerrarModal, resumenSemaforoUnidad,
   entrarAdmin, salirAdmin, toggleVerPass, formUnidad, guardarUnidad, toggleBaja,
-  cargarIniciales, cargarPrueba,
+  cargarIniciales,
   verInstructivoAdmin, verHistorialAdmin, verPuntajesAdmin,
   verInformeAdmin, toggleCheckGrupo, syncCheckTodos, descargarInformeAdmin,
   exportarRespaldoAdmin, restaurarRespaldoAdmin,
