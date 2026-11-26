@@ -501,8 +501,15 @@
             render();
         }
 
-        function toggleFixUser() {
-            state.shouldFixUser = !state.shouldFixUser;
+        // "Recordar mis datos" crea un alta en la nube (crearAlta, flota-nube.js).
+        // Si el alta falla o hay conflicto, el checkbox no se tilda.
+        async function toggleFixUser() {
+            const activar = !state.shouldFixUser;
+            if (activar && window.crearAlta) {
+                const ok = await window.crearAlta();
+                if (!ok) { render(); return; }
+            }
+            state.shouldFixUser = activar;
             localStorage.setItem('should_fix_user', state.shouldFixUser);
             if (state.shouldFixUser) {
                 localStorage.setItem('fixed_name', state.formData.driverName);

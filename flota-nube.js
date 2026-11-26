@@ -1,12 +1,13 @@
 // flota-nube.js
-// Paso 3 (borrador): capa nube con Firestore y Authentication.
-// Operarios: solo lectura, sin login.
+// Capa nube con Firestore y Authentication.
+// Operarios: solo lectura, sin login. Altas ("Recordar mis datos") en colección "altas".
 // Administradores: alta, edición y baja lógica de unidades. Acceso oculto (5 toques en el título).
-// NO integrado aún en index.html. Se integra cuando lo autorices.
+// Integrado en index.html (módulo cargado al final del body).
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getFirestore, collection, doc, setDoc, updateDoc, onSnapshot, writeBatch
+  getFirestore, collection, doc, setDoc, updateDoc, onSnapshot, writeBatch,
+  addDoc, getDocs, query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
@@ -158,6 +159,60 @@ async function guardarEnNube(record) {
 }
 
 onAuthStateChanged(auth, u => { usuarioAdmin = u; });
+
+// ---------- altas ("Recordar mis datos") ----------
+
+const VENTANA_CONFLICTO_MS = 5 * 60 * 1000;
+
+// Lunes de la semana de una fecha AAAA-MM-DD, en formato AAAA-MM-DD.
+function lunesDe(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const f = new Date(y, m - 1, d);
+  f.setDate(f.getDate() - ((f.getDay() + 6) % 7));
+  const p = n => String(n).padStart(2, "0");
+  return `${f.getFullYear()}-${p(f.getMonth() + 1)}-${p(f.getDate())}`;
+}
+
+// Crea un alta nueva. Devuelve true si se creó, false si no.
+// Control de conflicto solo en el cliente: orienta al operario, no es seguridad.
+async function crearAlta() {
+  const s = window.state;
+  const v = s.selectedVehicle;
+  const f = s.formData;
+  if (!v) return false;
+
+  if (!f.driverName || !f.driverDni || !f.startMileage || !f.weekDate) {
+    alert("Completá conductor, DNI, km y fecha antes de recordar datos.");
+    return false;
+  }
+
+  try {
+    const snap = await getDocs(query(collection(db, "altas"), where("unidadId", "==", v.id)));
+    const ahora = Date.now();
+    const conflicto = snap.docs.map(d => d.data()).find(a => {
+      const t = a.creado?.toMillis?.() ?? 0;
+      return ahora - t < VENTANA_CONFLICTO_MS && a.dni !== f.driverDni;
+    });
+    if (conflicto) {
+      alert(`Verificar: ${v.id} fue registrada hace instantes por otro conductor (DNI ${conflicto.dni}).`);
+      return false;
+    }
+
+    await addDoc(collection(db, "altas"), {
+      unidadId: v.id,
+      fecha: f.weekDate,
+      semanaInicio: lunesDe(f.weekDate),
+      conductor: f.driverName,
+      dni: f.driverDni,
+      km: Number(f.startMileage),
+      creado: serverTimestamp()
+    });
+    return true;
+  } catch (e) {
+    alert("No se pudo registrar el alta: " + e.message);
+    return false;
+  }
+}
 
 // ---------- Documentos (operarios) ----------
 
@@ -631,5 +686,5 @@ Object.assign(window, {
   entrarAdmin, salirAdmin, toggleVerPass, formUnidad, guardarUnidad, toggleBaja,
   cargarIniciales, cargarPrueba,
   verInstructivoAdmin, verHistorialAdmin, verPuntajesAdmin,
-  guardarEnNube
+  guardarEnNube, crearAlta
 });
