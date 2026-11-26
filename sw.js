@@ -1,4 +1,4 @@
-const CACHE_NAME = 'azilut-flota-v4';
+const CACHE_NAME = 'azilut-flota-v5';
 
 // Solo archivos estáticos externos van a caché (CDNs pesados que no cambian).
 const ASSETS_EXTERNOS = [

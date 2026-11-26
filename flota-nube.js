@@ -409,7 +409,7 @@ function panelAdmin() {
       </label>
       ${unidadesNube.length === 0
         ? `<button onclick="cargarIniciales()" class="px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold">Cargar unidades iniciales</button>`
-        : `<button onclick="cargarPrueba()" class="px-3 py-2 text-xs border border-slate-300 rounded-lg font-bold text-slate-500">Cargar prueba</button>`}
+        : ""}
     </div>`;
 
   mostrarModal("admin-modal", `
