@@ -490,6 +490,21 @@ function verInstructivoAdmin() {
 
 function verHistorialAdmin(filtroVehiculoId = "") {
   const historial = (window.state?.history || []);
+  const DIAS_CONTROL = [
+    ["monday", "Lunes"],
+    ["tuesday", "Martes"],
+    ["wednesday", "Miércoles"],
+    ["thursday", "Jueves"],
+    ["friday", "Viernes"],
+    ["saturday", "Sábado"],
+    ["sunday", "Domingo"]
+  ];
+  const esc = s => String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
   const opcionesVeh = unidadesNube
     .slice()
     .sort(ordenarPorId)
@@ -504,20 +519,37 @@ function verHistorialAdmin(filtroVehiculoId = "") {
     ? `<p class="text-xs text-slate-400 p-4 text-center">No hay registros cargados para esta selección.</p>`
     : filtrados.map(h => {
         const fecha = h.timestamp ? new Date(h.timestamp).toLocaleDateString("es-AR") : (h.weekDate || "—");
-        const fallas = (h.reportedItems || []).length;
+        const itemsReportados = Array.isArray(h.reportedItems) ? h.reportedItems : [];
+        const fallasDiarias = [];
+        const dc = h.dailyChecks || {};
+        DIAS_CONTROL.forEach(([key, dia]) => {
+          const d = dc[key];
+          if (!d) return;
+          const nota = d.notes ? ` (${esc(d.notes)})` : "";
+          if (d.oil === "MALO") fallasDiarias.push(`${dia}: Aceite en MAL estado${nota}`);
+          if (d.water === "MALO") fallasDiarias.push(`${dia}: Agua en MAL estado${nota}`);
+        });
+
+        const totalFallas = itemsReportados.length + fallasDiarias.length;
+        const detalleLista = [
+          ...fallasDiarias.map(txt => `<li>• ${txt}</li>`),
+          ...itemsReportados.map(it => `<li>• ${esc(it.label || it.id)}${it.status ? ` <span class="font-bold">(${esc(it.status)})</span>` : ""}</li>`)
+        ].join("");
+
         return `
           <div class="p-3 border border-slate-200 rounded-xl mb-2 text-xs">
             <div class="flex justify-between items-center font-bold text-slate-800 mb-1">
-              <span>🚗 ${h.vehicleId} · ${h.driverName || "Conductor no especificado"}</span>
+              <span>🚗 ${esc(h.vehicleId)} · ${esc(h.driverName || "Conductor no especificado")}</span>
               <span class="text-slate-500 font-normal">${fecha}</span>
             </div>
             <div class="text-slate-600 flex justify-between">
-              <span>Km: ${h.startMileage || "—"} · Tipo: ${h.type || "Semanal"}</span>
-              <span class="${fallas > 0 ? "text-amber-600 font-bold" : "text-green-600 font-bold"}">
-                ${fallas > 0 ? `⚠️ ${fallas} ítems observados` : "✅ Sin fallas"}
+              <span>Km: ${esc(h.startMileage || "—")} · Tipo: ${esc(h.type || "Semanal")}</span>
+              <span class="${totalFallas > 0 ? "text-red-600 font-bold" : "text-green-600 font-bold"}">
+                ${totalFallas > 0 ? `⚠️ ${totalFallas} ${totalFallas === 1 ? "falla observada" : "fallas observadas"}` : "✅ Sin fallas"}
               </span>
             </div>
-            ${h.generalObservations ? `<div class="mt-1 bg-slate-50 p-1.5 rounded text-slate-700 italic">"${h.generalObservations}"</div>` : ""}
+            ${totalFallas > 0 ? `<ul class="mt-1.5 bg-red-50 border border-red-100 p-2 rounded-lg text-red-800 space-y-0.5">${detalleLista}</ul>` : ""}
+            ${h.generalObservations ? `<div class="mt-1 bg-slate-50 p-1.5 rounded text-slate-700 italic">"${esc(h.generalObservations)}"</div>` : ""}
           </div>`;
       }).join("");
 
